@@ -1,16 +1,21 @@
 import json
+import re
 from types import SimpleNamespace
 
 from django.db import transaction
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.admin.utils import quote
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .agent import AGENT_PROFILE, run_agent
+from .forms import OperationsCaseForm, OperationsMoveForm
 from .models import ChatMessage, IncidentReport, StatusEvent
+from .notifications import notify_case_status
 
 MAX_HISTORY_MESSAGES = 30
 STATUS_LABELS = dict(IncidentReport.Status.choices)
@@ -89,6 +94,63 @@ def monitoring_page(request):
 
 @staff_member_required
 @require_GET
+def operations_dashboard(request):
+    return render(request, "chat/operations/dashboard.html", {"active_view": "dashboard"})
+
+
+@staff_member_required
+@require_GET
+def operations_map(request):
+    return render(request, "chat/operations/map.html", {"active_view": "map"})
+
+
+@staff_member_required
+@require_GET
+def operations_board(request):
+    return render(request, "chat/operations/board.html", {"active_view": "board"})
+
+
+@staff_member_required
+@require_POST
+@transaction.atomic
+def operations_case_update(request, ticket_id):
+    if not request.user.has_perm("chat.change_incidentreport"):
+        return JsonResponse({"error": "บัญชีนี้ไม่มีสิทธิ์แก้ไขเคส"}, status=403)
+    case = IncidentReport.objects.select_for_update().filter(pk=ticket_id).first()
+    if case is None:
+        return JsonResponse({"error": "ไม่พบเคสนี้"}, status=404)
+    previous_status = case.status
+    version = case.updated_at.isoformat()
+    form_class = OperationsMoveForm if request.POST.get("action") == "move" else OperationsCaseForm
+    form = form_class(request.POST, instance=case)
+    if not form.is_valid():
+        errors = [error for field_errors in form.errors.values() for error in field_errors]
+        return JsonResponse({"error": " ".join(errors)}, status=400)
+    if form.has_changed():
+        if request.POST.get("version") != version:
+            return JsonResponse({"error": "เคสถูกอัปเดตแล้ว กรุณาเปิดเคสใหม่ก่อนบันทึก"}, status=409)
+        case.save(update_fields=[*form.changed_data, "updated_at"])
+        if case.status != previous_status:
+            notify_case_status(case)
+    return JsonResponse({"ok": True})
+
+
+def _case_coordinates(case):
+    if case.latitude is not None and case.longitude is not None:
+        latitude, longitude = float(case.latitude), float(case.longitude)
+    else:
+        # Accept a complete coordinate pair supplied in the existing location field.
+        pair = re.fullmatch(r"\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*", case.location)
+        if not pair:
+            return None
+        latitude, longitude = map(float, pair.groups())
+    if -90 <= latitude <= 90 and -180 <= longitude <= 180:
+        return [latitude, longitude]
+    return None
+
+
+@staff_member_required
+@require_GET
 def monitoring_cases(request):
     cases = IncidentReport.objects.all()
     search = request.GET.get("q", "").strip()
@@ -116,10 +178,16 @@ def monitoring_cases(request):
         "urgent": all_cases.filter(urgency="HIGH").exclude(status=IncidentReport.Status.CLOSED).count(),
     }
     items = []
+    can_edit = request.user.has_perm("chat.change_incidentreport")
     for case in cases.prefetch_related("status_events")[:200]:
         item = _case_data(case)
         item.update({
             "created_at": case.created_at.isoformat(),
+            "coordinates": _case_coordinates(case),
+            "saved_coordinates": [float(case.latitude), float(case.longitude)]
+            if case.latitude is not None and case.longitude is not None else None,
+            "update_url": reverse("operations_case_update", args=[case.pk]) if can_edit else "",
+            "edit_url": reverse("admin:chat_incidentreport_change", args=[quote(case.pk)]) if can_edit else "",
             "events": [_event_data(event) for event in case.status_events.all()],
         })
         items.append(item)
@@ -204,11 +272,13 @@ def chat_api(request):
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.USER, content=message)
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.ASSISTANT, content=result.reply)
         case.flow_state = result.flow_state
+        changed_fields = ["flow_state", "updated_at"]
         for field in update_fields:
             value = getattr(result, field)
             if value:
                 setattr(case, field, value)
-        case.save()
+                changed_fields.append(field)
+        case.save(update_fields=changed_fields)
 
     return JsonResponse({"reply": result.reply, "case": _case_data(case)})
 

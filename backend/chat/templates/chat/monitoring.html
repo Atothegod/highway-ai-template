@@ -12,7 +12,7 @@
   </style>
 </head>
 <body>
-<header class="topbar"><a class="logo" href="/"><img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM"></a><div class="brand"><b>Operations Control</b><span>Ticket monitoring dashboard</span></div><div class="top-actions"><span class="live">● LIVE</span><span>{{ request.user.get_username }}</span><a class="logout" href="/admin/">Admin ↗</a></div></header>
+<header class="topbar"><a class="logo" href="/"><img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM"></a><div class="brand"><b>Operations Control</b><span>Ticket monitoring dashboard</span></div><div class="top-actions"><span class="live">● LIVE</span><a class="logout" href="{% url 'operations_dashboard' %}">Operations ↗</a><span>{{ request.user.get_username }}</span><a class="logout" href="/admin/">Admin ↗</a></div></header>
 <main class="page">
   <div class="heading"><div><h1>Ticket Case Monitoring</h1><p>ติดตามเหตุและสถานะการดำเนินงานแบบรวมศูนย์</p></div><div id="updated" class="updated">กำลังโหลดข้อมูล…</div></div>
   <section class="stats"><article class="stat"><small>เคสทั้งหมด</small><strong id="total">—</strong></article><article class="stat"><small>เปิดเคส</small><strong id="open">—</strong></article><article class="stat"><small>กำลังดำเนินการ</small><strong id="progress">—</strong></article><article class="stat"><small>ปิดแล้ว</small><strong id="closed">—</strong></article><article class="stat urgent"><small>เร่งด่วนที่ยังไม่ปิด</small><strong id="urgent">—</strong></article></section>

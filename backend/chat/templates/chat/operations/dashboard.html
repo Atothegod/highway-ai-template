@@ -1,0 +1,35 @@
+{% extends "chat/operations/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}ภาพรวมปฏิบัติการ{% endblock %}
+{% block description %}ติดตามสถานะเคสและเหตุที่แจ้งล่าสุดจากรถไฟฟ้าและทางพิเศษ{% endblock %}
+{% block content %}
+  <div class="overview">
+    <section class="panel" aria-labelledby="status-overview">
+      <div class="panel-heading">
+        <div><h2 id="status-overview">เคสตามสถานะ</h2><p>จำนวนเคสทั้งหมดในระบบ</p></div>
+        <a class="button" href="{% url 'operations_board' %}">เปิดบอร์ด <svg class="icon"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="status-summary">
+        <div class="status-line lane-open" data-summary="open">
+          <div><label for="progress-open"><i class="lane-dot"></i>เปิดเคส</label><strong>—</strong></div>
+          <progress id="progress-open" max="1" value="0"></progress>
+        </div>
+        <div class="status-line lane-progress" data-summary="in_progress">
+          <div><label for="progress-active"><i class="lane-dot"></i>กำลังดำเนินการ</label><strong>—</strong></div>
+          <progress id="progress-active" max="1" value="0"></progress>
+        </div>
+        <div class="status-line lane-closed" data-summary="closed">
+          <div><label for="progress-closed"><i class="lane-dot"></i>ปิดเคส</label><strong>—</strong></div>
+          <progress id="progress-closed" max="1" value="0"></progress>
+        </div>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="recent-heading">
+      <div class="panel-heading">
+        <div><h2 id="recent-heading">เคสที่แจ้งล่าสุด</h2><p>เลือกเคสเพื่อดูรายละเอียด</p></div>
+        <a class="button" href="{% url 'operations_map' %}">เปิดแผนที่ <svg class="icon"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div id="recent-cases" class="recent-cases"><p class="empty">กำลังโหลดเคส…</p></div>
+    </section>
+  </div>
+{% endblock %}

@@ -108,3 +108,85 @@ class MonitoringTests(TestCase):
         self.assertEqual(response.json()["stats"]["urgent"], 1)
         self.assertEqual(response.json()["result_count"], 1)
         self.assertEqual(response.json()["cases"][0]["title"], "ลิฟต์ขัดข้อง")
+
+
+class OperationsBoardTests(TestCase):
+    def setUp(self):
+        self.reporter = self.client_class()
+        session = self.reporter.session
+        self.case = IncidentReport.objects.create(session_key=session.session_key)
+        session["current_ticket_id"] = self.case.pk
+        session.save()
+        self.editor = get_user_model().objects.create_user(
+            username="operations-editor", is_staff=True, is_superuser=True,
+        )
+        self.endpoint = f"/api/operations/cases/{self.case.pk}/"
+        self.values = {
+            "status": "CLOSED", "urgency": "HIGH", "location": "สถานีตัวอย่าง",
+            "latitude": "13.756300", "longitude": "100.501800",
+            "version": self.case.updated_at.isoformat(),
+        }
+
+    def test_close_case_and_save_coordinates_notifies_only_reporter(self):
+        self.client.force_login(self.editor)
+        response = self.client.post(self.endpoint, self.values)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.case.refresh_from_db()
+        self.assertEqual(self.case.status, IncidentReport.Status.CLOSED)
+        self.assertEqual(str(self.case.latitude), "13.756300")
+        self.assertEqual(str(self.case.longitude), "100.501800")
+        self.assertEqual(self.case.urgency, "HIGH")
+        self.assertEqual(self.case.location, "สถานีตัวอย่าง")
+        self.assertEqual(self.client.post(self.endpoint, self.values).status_code, 200)
+        self.assertEqual(self.case.status_events.count(), 1)
+        self.assertEqual(self.case.messages.count(), 1)
+
+        monitor = self.client.get("/api/monitor/cases/").json()["cases"][0]
+        self.assertEqual(monitor["coordinates"], [13.7563, 100.5018])
+        event = self.reporter.get("/api/ticket/status/?after=0").json()["events"][0]
+        self.assertEqual(event["status"], IncidentReport.Status.CLOSED)
+        messages = self.reporter.get("/api/chat/state/").json()["messages"]
+        self.assertIn("ปิดเคสแล้ว", messages[0]["content"])
+        self.assertEqual(self.client_class().get("/api/ticket/status/").json()["events"], [])
+
+    def test_permissions_coordinates_and_stale_updates(self):
+        viewer = get_user_model().objects.create_user(username="operations-viewer", is_staff=True)
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.post(self.endpoint, self.values).status_code, 403)
+        self.assertNotContains(self.client.get("/operations/board/"), 'id="case-editor"')
+        self.client.force_login(self.editor)
+        self.assertContains(self.client.get("/operations/board/"), 'id="pin-map"')
+        for fields in ({"longitude": ""}, {"latitude": "91"}):
+            self.assertEqual(self.client.post(self.endpoint, self.values | fields).status_code, 400)
+        self.assertEqual(self.client.post(self.endpoint, self.values | {"version": "stale"}).status_code, 409)
+
+        response = self.client.post(self.endpoint, self.values | {"status": "OPEN"})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(self.case.status_events.exists())
+        self.assertFalse(self.case.messages.exists())
+
+    def test_update_requires_csrf_token(self):
+        client = self.client_class(enforce_csrf_checks=True)
+        client.force_login(self.editor)
+        self.assertEqual(client.post(self.endpoint, self.values).status_code, 403)
+        client.get("/operations/board/")
+        values = self.values | {"csrfmiddlewaretoken": client.cookies["csrftoken"].value}
+        self.assertEqual(client.post(self.endpoint, values).status_code, 200)
+
+    def test_board_move_preserves_other_fields(self):
+        self.client.force_login(self.editor)
+        self.assertEqual(self.client.post(self.endpoint, self.values).status_code, 200)
+        self.case.refresh_from_db()
+        move = {"action": "move", "status": "IN_PROGRESS", "version": self.case.updated_at.isoformat()}
+        self.assertEqual(self.client.post(self.endpoint, move | {"status": "unknown"}).status_code, 400)
+        self.assertEqual(self.client.post(self.endpoint, move | {"version": "stale"}).status_code, 409)
+        self.assertEqual(self.client.post(self.endpoint, move).status_code, 200)
+        self.assertEqual(self.client.post(self.endpoint, move).status_code, 200)
+        self.case.refresh_from_db()
+        self.assertEqual(self.case.status, IncidentReport.Status.IN_PROGRESS)
+        self.assertEqual(self.case.location, self.values["location"])
+        self.assertEqual(self.case.urgency, self.values["urgency"])
+        self.assertEqual(str(self.case.latitude), self.values["latitude"])
+        self.assertEqual(str(self.case.longitude), self.values["longitude"])
+        self.assertEqual(self.case.status_events.count(), 2)
+        self.assertEqual(self.case.messages.count(), 2)

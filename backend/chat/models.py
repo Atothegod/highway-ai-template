@@ -1,5 +1,7 @@
 import secrets
 
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -30,6 +32,14 @@ class IncidentReport(models.Model):
     description = models.TextField(blank=True)
     service_area = models.CharField(max_length=120, blank=True)
     location = models.CharField(max_length=300, blank=True)
+    latitude = models.DecimalField(
+        "ละติจูด", max_digits=9, decimal_places=6, blank=True, null=True,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+    )
+    longitude = models.DecimalField(
+        "ลองจิจูด", max_digits=9, decimal_places=6, blank=True, null=True,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+    )
     occurred_at = models.CharField(max_length=120, blank=True)
     impact = models.TextField(blank=True)
     contact = models.CharField(max_length=200, blank=True)
@@ -39,6 +49,13 @@ class IncidentReport(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+        if self.latitude is None and self.longitude is not None:
+            raise ValidationError({"latitude": "กรุณาระบุละติจูดคู่กับลองจิจูด"})
+        if self.longitude is None and self.latitude is not None:
+            raise ValidationError({"longitude": "กรุณาระบุลองจิจูดคู่กับละติจูด"})
 
     def __str__(self):
         return f"{self.ticket_id} — {self.title or 'กำลังรับข้อมูล'}"

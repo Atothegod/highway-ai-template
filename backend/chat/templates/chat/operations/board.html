@@ -1,0 +1,23 @@
+{% extends "chat/operations/base.html" %}
+{% block title %}บอร์ดเคส{% endblock %}
+{% block heading %}บอร์ดเคส{% endblock %}
+{% block description %}ลากการ์ดไปยังคอลัมน์เพื่อเปลี่ยนสถานะ หรือเปิดการ์ดเพื่อแก้ไขรายละเอียด{% endblock %}
+{% block content %}
+  <section class="board" aria-label="บอร์ดเคสตามสถานะ">
+    <section class="lane lane-open" data-drop-status="OPEN" aria-labelledby="lane-open">
+      <div class="lane-head"><span class="lane-dot"></span><h2 id="lane-open">เปิดเคส</h2><span class="count" data-count="OPEN">—</span></div>
+      <div class="lane-cards" data-lane="OPEN"><p class="empty">กำลังโหลดเคส…</p></div>
+    </section>
+    <section class="lane lane-progress" data-drop-status="IN_PROGRESS" aria-labelledby="lane-progress">
+      <div class="lane-head"><span class="lane-dot"></span><h2 id="lane-progress">กำลังดำเนินการ</h2><span class="count" data-count="IN_PROGRESS">—</span></div>
+      <div class="lane-cards" data-lane="IN_PROGRESS"><p class="empty">กำลังโหลดเคส…</p></div>
+    </section>
+    <section class="lane lane-closed" data-drop-status="CLOSED" aria-labelledby="lane-closed">
+      <div class="lane-head"><span class="lane-dot"></span><h2 id="lane-closed">ปิดเคส</h2><span class="count" data-count="CLOSED">—</span></div>
+      <div class="lane-cards" data-lane="CLOSED"><p class="empty">กำลังโหลดเคส…</p></div>
+    </section>
+  </section>
+{% endblock %}
+{% block map_assets %}
+  {% if perms.chat.change_incidentreport %}{% include "chat/operations/leaflet_assets.html" %}{% endif %}
+{% endblock %}

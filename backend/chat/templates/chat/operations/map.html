@@ -1,0 +1,37 @@
+{% extends "chat/operations/base.html" %}
+{% block title %}แผนที่เคส{% endblock %}
+{% block heading %}แผนที่เคส{% endblock %}
+{% block description %}ติดตามตำแหน่งเหตุบนเครือข่ายรถไฟฟ้าและทางพิเศษ{% endblock %}
+{% block map_assets %}
+  {% include "chat/operations/leaflet_assets.html" %}
+{% endblock %}
+{% block content %}
+  <section class="map-layout" aria-label="แผนที่และรายการเคส">
+    <div class="panel map-panel">
+      <div class="panel-heading">
+        <div><h2>ตำแหน่งเหตุบนแผนที่</h2><p id="map-count">กำลังโหลดตำแหน่งเคส…</p></div>
+        <button id="map-reset" class="button" type="button"><svg class="icon"><use href="#i-pin"/></svg>จัดมุมมอง</button>
+      </div>
+      <div class="map-surface">
+        <div id="case-map" aria-label="แผนที่ตำแหน่งเคส"></div>
+        <p id="map-message" class="map-message" hidden></p>
+        <div id="map-empty" class="map-empty" hidden>
+          <strong id="map-empty-title"></strong>
+          <p id="map-empty-hint"></p>
+          <a class="button" href="#feed-title">ดูรายการเคส</a>
+        </div>
+      </div>
+      <div class="legend" aria-label="ความหมายของสีบนแผนที่">
+        <strong>ความเร่งด่วน</strong>
+        <span class="HIGH"><i class="dot"></i> สูง</span>
+        <span class="MEDIUM"><i class="dot"></i> ปานกลาง</span>
+        <span class="LOW"><i class="dot"></i> ต่ำ</span>
+        <span class="UNKNOWN"><i class="dot"></i> ไม่ระบุ</span>
+      </div>
+    </div>
+    <aside class="panel case-feed" aria-labelledby="feed-title">
+      <div class="panel-heading"><div><h2 id="feed-title" tabindex="-1">รายการเคส</h2><p>รวมเคสที่ยังไม่ได้ปักหมุด</p></div><span id="case-count" class="count">—</span></div>
+      <div id="case-list" class="case-list"><p class="empty">กำลังโหลดเคส…</p></div>
+    </aside>
+  </section>
+{% endblock %}

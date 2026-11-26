@@ -1,0 +1,41 @@
+  {% if perms.chat.change_incidentreport %}
+    <div class="case-edit">
+      <button type="button" id="open-editor" class="button" aria-expanded="false" aria-controls="case-editor" hidden>แก้ไขเคส</button>
+      <form id="case-editor" hidden>
+        {% csrf_token %}
+        <input name="version" type="hidden">
+        <fieldset>
+          <legend>จัดการเคส</legend>
+          <div class="editor-grid">
+            <label>สถานะ
+              <select name="status" required>
+                <option value="OPEN">เปิดเคส</option>
+                <option value="IN_PROGRESS">กำลังดำเนินการ</option>
+                <option value="CLOSED">ปิดเคส</option>
+              </select>
+            </label>
+            <label>ความเร่งด่วน
+              <select name="urgency">
+                <option value="">ไม่ระบุ</option><option value="HIGH">สูง</option>
+                <option value="MEDIUM">ปานกลาง</option><option value="LOW">ต่ำ</option>
+              </select>
+            </label>
+            <label class="editor-wide">สถานที่ <input name="location" maxlength="300"></label>
+          </div>
+          <p class="editor-hint">เมื่อเปลี่ยนสถานะ ระบบจะแจ้งผู้แจ้งผ่านแชต BEM Care</p>
+          <div class="pin-heading">
+            <div><strong>พิกัดจุดเกิดเหตุ</strong><p class="editor-hint">คลิกแผนที่ ลากหมุด หรือกรอกพิกัดเอง</p></div>
+            <button type="button" id="device-location" class="button"><svg class="icon"><use href="#i-pin"/></svg>ใช้ตำแหน่งของฉัน</button>
+          </div>
+          <div id="pin-map" aria-label="แผนที่สำหรับปักหมุด"></div>
+          <p id="pin-feedback" class="editor-hint" role="status" hidden></p>
+          <div class="editor-grid">
+            <label>ละติจูด <input name="latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal"></label>
+            <label>ลองจิจูด <input name="longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal"></label>
+          </div>
+          <p id="editor-error" class="notice error" role="alert" hidden></p>
+          <button type="submit" class="button primary">บันทึกการเปลี่ยนแปลง</button>
+        </fieldset>
+      </form>
+    </div>
+  {% endif %}

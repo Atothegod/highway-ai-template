@@ -1,6 +1,8 @@
 from django.contrib import admin
+from django.db import transaction
 
 from .models import ChatMessage, IncidentReport, StatusEvent
+from .notifications import notify_case_status
 
 
 class ChatMessageInline(admin.TabularInline):
@@ -23,21 +25,14 @@ class IncidentReportAdmin(admin.ModelAdmin):
     readonly_fields = ("ticket_id", "session_key", "created_at", "updated_at")
     inlines = (StatusEventInline, ChatMessageInline)
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
         previous_status = None
         if change:
-            previous_status = IncidentReport.objects.filter(pk=obj.pk).values_list("status", flat=True).first()
+            previous_status = IncidentReport.objects.select_for_update().filter(pk=obj.pk).values_list("status", flat=True).first()
         super().save_model(request, obj, form, change)
         if previous_status and previous_status != obj.status:
-            StatusEvent.objects.create(
-                incident=obj,
-                status=obj.status,
-                message={
-                    IncidentReport.Status.OPEN: "เปิดเคสและรอการตรวจสอบ",
-                    IncidentReport.Status.IN_PROGRESS: "เจ้าหน้าที่กำลังดำเนินการตรวจสอบและแก้ไข",
-                    IncidentReport.Status.CLOSED: "ดำเนินการเสร็จสิ้นและปิดเคสแล้ว",
-                }[obj.status],
-            )
+            notify_case_status(obj)
 
 
 @admin.register(StatusEvent)

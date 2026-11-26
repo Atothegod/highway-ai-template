@@ -1,0 +1,82 @@
+{% load static %}
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · BEM Operations</title>
+  {% block map_assets %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'chat/operations.css' %}">
+  <script defer src="{% static 'chat/operations.js' %}"></script>
+</head>
+<body data-view="{{ active_view }}" data-cases-url="{% url 'monitoring_cases' %}">
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16M6 8h.01M12 8h.01M18 8h.01"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-4L3 9m0-5v5h5m-4 5a8 8 0 0 0 14 4l3-3m0 5v-5h-5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Zm0 6v4m0 3h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+  </svg>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="wordmark" href="{% url 'operations_dashboard' %}">
+        <img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM" width="104" height="38">
+        <span>Operations</span>
+      </a>
+      <div class="topbar-meta">
+        <a href="{% url 'monitoring' %}">รายการเคสทั้งหมด <span aria-hidden="true">↗</span></a>
+        <span class="avatar" title="{{ request.user.get_username }}" aria-label="{{ request.user.get_username }}">{{ request.user.get_username|slice:":1"|upper }}</span>
+      </div>
+    </div>
+  </header>
+  <main class="workspace">
+    <div class="page-heading">
+      <div><h1>{% block heading %}{% endblock %}</h1><p>{% block description %}{% endblock %}</p></div>
+      <div class="update">
+        <span id="updated" role="status">กำลังโหลดข้อมูล…</span>
+        <button id="refresh" class="button" type="button"><svg class="icon"><use href="#i-refresh"/></svg>รีเฟรช</button>
+      </div>
+    </div>
+    <section class="metrics" aria-label="ภาพรวมเคสทั้งหมด">
+      <div class="metric"><span class="metric-icon total"><svg class="icon"><use href="#i-stack"/></svg></span><div>เคสทั้งหมด<strong id="total">—</strong></div></div>
+      <div class="metric"><span class="metric-icon open"><svg class="icon"><use href="#i-pin"/></svg></span><div>เปิดเคส<strong id="open">—</strong></div></div>
+      <div class="metric"><span class="metric-icon progress"><svg class="icon"><use href="#i-clock"/></svg></span><div>กำลังดำเนินการ<strong id="in_progress">—</strong></div></div>
+      <div class="metric"><span class="metric-icon urgent"><svg class="icon"><use href="#i-alert"/></svg></span><div>เร่งด่วนที่ยังไม่ปิด<strong id="urgent">—</strong></div></div>
+    </section>
+    <div class="toolbar">
+      <nav class="view-nav" aria-label="มุมมองปฏิบัติการ">
+        <a href="{% url 'operations_dashboard' %}" {% if active_view == 'dashboard' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-stack"/></svg>Dashboard</a>
+        <a href="{% url 'operations_map' %}" {% if active_view == 'map' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-map"/></svg>Map</a>
+        <a href="{% url 'operations_board' %}" {% if active_view == 'board' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-board"/></svg>Board</a>
+      </nav>
+      {% if active_view != 'dashboard' %}
+      <form id="filters" class="filters" role="search" aria-label="ค้นหาและกรองเคส">
+        <label class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" name="q" aria-label="ค้นหาเคส" placeholder="ค้นหาเคสหรือสถานที่…"></label>
+        {% if active_view == 'map' %}
+          <select name="status" aria-label="สถานะ"><option value="">ทุกสถานะ</option><option value="OPEN">เปิดเคส</option><option value="IN_PROGRESS">กำลังดำเนินการ</option><option value="CLOSED">ปิดเคส</option></select>
+        {% endif %}
+        <select name="urgency" aria-label="ความเร่งด่วน"><option value="">ทุกความเร่งด่วน</option><option value="HIGH">สูง</option><option value="MEDIUM">ปานกลาง</option><option value="LOW">ต่ำ</option></select>
+      </form>
+      {% endif %}
+    </div>
+    <p id="load-error" class="notice error" role="alert" hidden></p>
+    <noscript><p class="notice">เปิดใช้งาน JavaScript เพื่อดูข้อมูลเคส</p></noscript>
+    <p id="case-feedback" class="notice" role="status" hidden></p>
+    {% block content %}{% endblock %}
+    <p class="data-note">{% if active_view != 'dashboard' %}แสดงสูงสุด 200 เคสล่าสุด <span aria-hidden="true">·</span> {% endif %}อัปเดตทุก 15 วินาที</p>
+  </main>
+  <dialog id="case-dialog" class="case-dialog" aria-labelledby="case-title">
+    <div class="dialog-head">
+      <div><p id="case-id" class="ticket-id"></p><h2 id="case-title"></h2></div>
+      <form method="dialog"><button class="icon-button" aria-label="ปิดรายละเอียด" autofocus>×</button></form>
+    </div>
+    {% if active_view == 'map' or active_view == 'board' %}{% include 'chat/operations/case_editor.html' %}{% endif %}
+    <div id="case-details" class="case-details"></div>
+  </dialog>
+</body>
+</html>
