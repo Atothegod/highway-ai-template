@@ -7,7 +7,47 @@ from .agent import AgentResult
 from .models import IncidentReport, StatusEvent
 
 
+class ChatLoginTests(TestCase):
+    def test_chat_requires_username_and_consent(self):
+        self.assertRedirects(self.client.get("/"), "/login/")
+        for username, consent in (("reporter", ""), ("   ", "on")):
+            with self.subTest(username=username, consent=consent):
+                response = self.client.post("/login/", {"username": username, "pdpa_consent": consent})
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context["form"].errors)
+                self.assertNotIn("chat_identity", self.client.session)
+
+        for method, path in (
+            ("get", "/api/chat/state/"),
+            ("post", "/api/chat/"),
+            ("get", "/api/ticket/status/"),
+            ("post", "/api/chat/reset/"),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(getattr(self.client, method)(path).status_code, 403)
+
+    def test_login_binds_consent_to_existing_chat_session(self):
+        session = self.client.session
+        case = IncidentReport.objects.create(session_key=session.session_key)
+        session["current_ticket_id"] = case.pk
+        session.save()
+
+        response = self.client.post("/login/", {"username": "  reporter  ", "pdpa_consent": "on"})
+        self.assertRedirects(response, "/")
+        self.assertContains(self.client.get("/"), "reporter")
+        self.assertEqual(self.client.session.session_key, session.session_key)
+        identity = self.client.session["chat_identity"]
+        self.assertEqual(identity["username"], "reporter")
+        self.assertTrue(identity["consented_at"])
+        self.assertEqual(self.client.get("/api/chat/state/").json()["case"]["ticket_id"], case.pk)
+        self.assertEqual(self.client.post("/api/chat/reset/").status_code, 200)
+        self.assertEqual(self.client.session["chat_identity"], identity)
+
+
 class IncidentFlowTests(TestCase):
+    def setUp(self):
+        self.client.post("/login/", {"username": "reporter", "pdpa_consent": "on"})
+
     @patch("chat.views.run_agent")
     def test_chat_creates_ticket_and_structured_incident(self, mocked_agent):
         mocked_agent.return_value = AgentResult(
@@ -31,6 +71,7 @@ class IncidentFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         case = IncidentReport.objects.get()
+        self.assertEqual(case.session_key, self.client.session.session_key)
         self.assertTrue(case.ticket_id.startswith("BEM-"))
         self.assertEqual(case.flow_state, IncidentReport.FlowState.CONFIRMING)
         self.assertEqual(case.category_level_2, "ความพร้อมให้บริการรถไฟฟ้า")
@@ -47,6 +88,7 @@ class IncidentFlowTests(TestCase):
         self.client.post("/api/chat/", {"message": "พบปัญหา"}, content_type="application/json")
 
         other_client = self.client_class()
+        other_client.post("/login/", {"username": "reporter", "pdpa_consent": "on"})
         response = other_client.get("/api/chat/state/")
 
         self.assertEqual(response.json()["case"], None)
@@ -113,6 +155,7 @@ class MonitoringTests(TestCase):
 class OperationsBoardTests(TestCase):
     def setUp(self):
         self.reporter = self.client_class()
+        self.reporter.post("/login/", {"username": "reporter", "pdpa_consent": "on"})
         session = self.reporter.session
         self.case = IncidentReport.objects.create(session_key=session.session_key)
         session["current_ticket_id"] = self.case.pk
@@ -147,7 +190,9 @@ class OperationsBoardTests(TestCase):
         self.assertEqual(event["status"], IncidentReport.Status.CLOSED)
         messages = self.reporter.get("/api/chat/state/").json()["messages"]
         self.assertIn("ปิดเคสแล้ว", messages[0]["content"])
-        self.assertEqual(self.client_class().get("/api/ticket/status/").json()["events"], [])
+        other_reporter = self.client_class()
+        other_reporter.post("/login/", {"username": "reporter", "pdpa_consent": "on"})
+        self.assertEqual(other_reporter.get("/api/ticket/status/").json()["events"], [])
 
     def test_permissions_coordinates_and_stale_updates(self):
         viewer = get_user_model().objects.create_user(username="operations-viewer", is_staff=True)

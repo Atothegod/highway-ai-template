@@ -2,7 +2,12 @@ import os
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
-ALLOWED_HOSTS = ["*"]
+HTTPS_DOMAIN = os.getenv("DJANGO_HTTPS_DOMAIN")
+ALLOWED_HOSTS = [HTTPS_DOMAIN, "localhost", "127.0.0.1"] if HTTPS_DOMAIN else ["*"]
+if HTTPS_DOMAIN:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

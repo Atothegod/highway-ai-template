@@ -1,0 +1,50 @@
+{% load static %}
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เข้าสู่แชต | BEM Care</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; background: linear-gradient(145deg, #eaf2f6, #f8fbfc); color: #172536; font: 1rem/1.55 system-ui, "Noto Sans Thai", sans-serif; }
+    main { width: min(100%, 440px); padding: clamp(24px, 6vw, 36px); background: #fff; border: 1px solid #dce6ed; border-radius: 22px; box-shadow: 0 18px 50px #07365f1f; }
+    .brand { display: flex; align-items: center; gap: 12px; color: #07365f; }
+    .brand img { width: 48px; height: 48px; border-radius: 14px; object-fit: cover; object-position: center 22%; }
+    h1 { margin: 20px 0 4px; font-size: 1.6rem; color: #07365f; }
+    p { margin: 0 0 22px; color: #506070; }
+    label { font-weight: 650; }
+    input[type="text"] { width: 100%; margin-top: 6px; padding: 11px 13px; border: 1px solid #9eafbd; border-radius: 10px; font: inherit; }
+    fieldset { margin: 20px 0; border: 1px solid #dce6ed; border-radius: 10px; padding: 12px; }
+    legend { color: #07365f; font-weight: 700; padding: 0 5px; }
+    .consent { display: flex; align-items: flex-start; gap: 10px; font-size: .94rem; }
+    .consent label { font-weight: 400; }
+    input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 3px 0 0; accent-color: #07365f; }
+    .errorlist { margin: 6px 0 0; padding-inline-start: 20px; color: #a02623; }
+    button { width: 100%; border: 0; border-radius: 10px; padding: 12px; background: #07365f; color: #fff; font: inherit; font-weight: 750; cursor: pointer; }
+    :focus-visible { outline: 3px solid #087f99; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="{% static 'chat/bem-care-agent.png' %}" alt=""><strong>BEM Care</strong></div>
+    <h1>เข้าสู่แชตแจ้งเหตุ</h1>
+    <p>กรอกชื่อผู้ใช้และให้ความยินยอมเพื่อเริ่มสนทนา</p>
+    <form method="post" action="{% url 'chat_login' %}">
+      {% csrf_token %}
+      {{ form.username.label_tag }}
+      {{ form.username }}
+      {{ form.username.errors }}
+      <fieldset>
+        <legend>ความยินยอมเกี่ยวกับข้อมูลส่วนบุคคล (PDPA)</legend>
+        <div class="consent">
+          {{ form.pdpa_consent }}
+          {{ form.pdpa_consent.label_tag }}
+        </div>
+        {{ form.pdpa_consent.errors }}
+      </fieldset>
+      <button type="submit">เข้าแชต</button>
+    </form>
+  </main>
+</body>
+</html>

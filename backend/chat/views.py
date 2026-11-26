@@ -1,5 +1,6 @@
 import json
 import re
+from functools import wraps
 from types import SimpleNamespace
 
 from django.db import transaction
@@ -7,19 +8,40 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.admin.utils import quote
 from django.db.models import Count, Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .agent import AGENT_PROFILE, run_agent
-from .forms import OperationsCaseForm, OperationsMoveForm
+from .forms import ChatLoginForm, OperationsCaseForm, OperationsMoveForm
 from .models import ChatMessage, IncidentReport, StatusEvent
 from .notifications import notify_case_status
 
 MAX_HISTORY_MESSAGES = 30
 STATUS_LABELS = dict(IncidentReport.Status.choices)
 FLOW_LABELS = dict(IncidentReport.FlowState.choices)
+CHAT_IDENTITY = "chat_identity"
+CHAT_CONSENT_VERSION = 1
+
+
+def _chat_identity(request):
+    identity = request.session.get(CHAT_IDENTITY)
+    if identity and identity["consent_version"] == CHAT_CONSENT_VERSION:
+        return identity
+    return None
+
+
+def chat_session_required(view):
+    @wraps(view)
+    def gated_view(request, *args, **kwargs):
+        if not _chat_identity(request):
+            return JsonResponse({"error": "กรุณาเข้าสู่แชตและให้ความยินยอมก่อนใช้งาน"}, status=403)
+        return view(request, *args, **kwargs)
+
+    return never_cache(gated_view)
 
 
 def _blank_case():
@@ -81,10 +103,30 @@ def _event_data(event):
     }
 
 
+@never_cache
+@require_http_methods(["GET", "POST"])
+def chat_login(request):
+    if _chat_identity(request):
+        return redirect("chat")
+    form = ChatLoginForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        request.session[CHAT_IDENTITY] = {
+            "username": form.cleaned_data["username"],
+            "consented_at": timezone.now().isoformat(),
+            "consent_version": CHAT_CONSENT_VERSION,
+        }
+        return redirect("chat")
+    return render(request, "chat/login.html", {"form": form})
+
+
+@never_cache
+@require_GET
 @ensure_csrf_cookie
 def chat_page(request):
-    _ensure_session(request)
-    return render(request, "chat/index.html", {"agent": AGENT_PROFILE})
+    identity = _chat_identity(request)
+    if not identity:
+        return redirect("chat_login")
+    return render(request, "chat/index.html", {"agent": AGENT_PROFILE, "username": identity["username"]})
 
 
 @staff_member_required
@@ -195,6 +237,7 @@ def monitoring_cases(request):
 
 
 @require_GET
+@chat_session_required
 def chat_state(request):
     session_key = _ensure_session(request)
     cursor = StatusEvent.objects.filter(incident__session_key=session_key).order_by("-id").values_list("id", flat=True).first() or 0
@@ -215,6 +258,7 @@ def chat_state(request):
 
 
 @require_POST
+@chat_session_required
 def chat_api(request):
     try:
         data = json.loads(request.body)
@@ -284,6 +328,7 @@ def chat_api(request):
 
 
 @require_GET
+@chat_session_required
 def status_events(request):
     case = _current_case(request)
     try:
@@ -297,6 +342,7 @@ def status_events(request):
 
 
 @require_POST
+@chat_session_required
 def reset_chat(request):
     request.session.pop("current_ticket_id", None)
     request.session.pop("pre_case_history", None)
