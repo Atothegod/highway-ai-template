@@ -448,7 +448,9 @@ def chat_state(request):
     return JsonResponse({
         "case": _case_data(case),
         "messages": messages,
-        "events": [_event_data(event) for event in case.status_events.all()],
+        "events": [
+            _event_data(event) for event in case.status_events.all()
+        ] if case.status != IncidentReport.Status.CLOSED else [],
         "cursor": cursor,
         "staff_cursor": max((message["id"] for message in messages if message["role"] == ChatMessage.Role.STAFF), default=0),
     })
@@ -497,15 +499,6 @@ def chat_pin(request):
     return JsonResponse({"case": _case_data(case)})
 
 
-def _closed_chat_reply(case, message):
-    reply = f"เคส {case.pk} ปิดแล้วครับ"
-    ChatMessage.objects.bulk_create([
-        ChatMessage(incident=case, role=ChatMessage.Role.USER, content=message),
-        ChatMessage(incident=case, role=ChatMessage.Role.ASSISTANT, content=reply),
-    ])
-    return JsonResponse({"reply": reply, "case": _case_data(case)})
-
-
 def _receive_human_message(case, message):
     ChatMessage.objects.create(incident=case, role=ChatMessage.Role.USER, content=message)
     case.save(update_fields=["updated_at"])
@@ -525,11 +518,25 @@ def chat_api(request):
         return JsonResponse({"error": "กรุณาระบุข้อความไม่เกิน 4,000 ตัวอักษร"}, status=400)
 
     case = _current_case(request)
-    if case and (case.status == IncidentReport.Status.CLOSED or case.human_mode):
+    if case is None or case.status != IncidentReport.Status.CLOSED:
+        response = _process_chat_message(request, case, message, received_at)
+        if response is not None:
+            return response
+    # Closing a case ends its chat context. The next message starts intake again.
+    request.session.pop("current_ticket_id", None)
+    request.session.pop("pre_case_history", None)
+    response = _process_chat_message(request, None, message, received_at, started_new=True)
+    if response is not None:
+        return response
+    return JsonResponse({"error": "เคสนี้เพิ่งถูกปิด กรุณาส่งข้อความอีกครั้ง"}, status=409)
+
+
+def _process_chat_message(request, case, message, received_at, *, started_new=False):
+    if case and case.human_mode:
         with transaction.atomic():
             case = IncidentReport.objects.select_for_update().get(pk=case.pk)
             if case.status == IncidentReport.Status.CLOSED:
-                return _closed_chat_reply(case, message)
+                return None
             if case.human_mode:
                 return _receive_human_message(case, message)
     if case:
@@ -554,7 +561,7 @@ def chat_api(request):
             {"role": ChatMessage.Role.ASSISTANT, "content": result.reply},
         ])
         request.session["pre_case_history"] = history_items[-MAX_HISTORY_MESSAGES:]
-        return JsonResponse({"reply": result.reply, "case": None})
+        return JsonResponse({"reply": result.reply, "case": None, "started_new": started_new})
 
     if case is None:
         case = IncidentReport.objects.create(
@@ -585,7 +592,7 @@ def chat_api(request):
     with transaction.atomic():
         case = IncidentReport.objects.select_for_update().get(pk=case.pk)
         if case.status == IncidentReport.Status.CLOSED:
-            return _closed_chat_reply(case, message)
+            return None
         if case.human_mode:
             return _receive_human_message(case, message)
         changed_fields = ["updated_at"]
@@ -626,7 +633,7 @@ def chat_api(request):
             changed_fields.extend(apply_initial_routing(case, timezone.now()))
         case.save(update_fields=changed_fields)
 
-    return JsonResponse({"reply": result.reply, "case": _case_data(case)})
+    return JsonResponse({"reply": result.reply, "case": _case_data(case), "started_new": started_new})
 
 
 @require_GET
@@ -637,12 +644,16 @@ def status_events(request):
         staff_after = max(0, int(request.GET.get("staff_after", 0)))
     except ValueError:
         after = staff_after = 0
+    session_key = _ensure_session(request)
+    ticket_id = request.session.get("current_ticket_id")
     events = [
         _event_data(event) for event in StatusEvent.objects.filter(
-            incident__session_key=_ensure_session(request), id__gt=after,
+            incident_id=ticket_id, incident__session_key=session_key, id__gt=after,
         ).order_by("id")
-    ]
+    ] if ticket_id else []
     case = _current_case(request)
+    if case and case.status == IncidentReport.Status.CLOSED:
+        events = [event for event in events if event["status"] == IncidentReport.Status.CLOSED]
     staff_messages = list(case.messages.filter(
         role=ChatMessage.Role.STAFF, pk__gt=staff_after,
     ).order_by("pk").values("id", "role", "content")) if case else []

@@ -356,11 +356,46 @@ class OperationsBoardTests(TestCase):
         self.assertEqual(state["cursor"], cursor)
         self.assertEqual(len(state["messages"]), 2)
         self.assertTrue(all(m["is_status_update"] for m in state["messages"]))
-        followup = self.reporter.post("/api/chat/", {"message": "สถานะเป็นยังไง"},
+        self.assertEqual(state["events"], [])
+        mocked_agent.return_value = AgentResult(
+            reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True,
+            description="เหตุใหม่",
+        )
+        followup = self.reporter.post("/api/chat/", {"message": "ขอแจ้งเหตุใหม่"},
                                       content_type="application/json").json()
-        self.assertEqual(followup["case"]["status"], "CLOSED")
-        self.assertIn("ปิดแล้ว", followup["reply"])
-        mocked_agent.assert_not_called()
+        self.assertTrue(followup["started_new"])
+        next_ticket = followup["case"]["ticket_id"]
+        self.assertNotEqual(next_ticket, self.case.pk)
+        self.assertEqual(followup["case"]["status"], "OPEN")
+        self.assertEqual(mocked_agent.call_args.kwargs["history"], "")
+        self.assertEqual(self.case.messages.count(), 2)
+        self.assertEqual(self.case.status_events.count(), 2)
+        new_state = self.reporter.get("/api/chat/state/").json()
+        self.assertEqual([e["ticket_id"] for e in new_state["events"]], [next_ticket])
+        self.assertFalse(any(self.case.pk in m["content"] for m in new_state["messages"]))
+        poll = self.reporter.get("/api/ticket/status/").json()
+        self.assertEqual([e["ticket_id"] for e in poll["events"]], [next_ticket])
+
+    @patch("chat.views.run_agent")
+    def test_case_closed_while_agent_is_processing_restarts_message(self, mocked_agent):
+        def analyze(**kwargs):
+            if kwargs["case"].pk == self.case.pk:
+                IncidentReport.objects.filter(pk=self.case.pk).update(status=IncidentReport.Status.CLOSED)
+            return AgentResult(reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True)
+
+        def process(**kwargs):
+            if isinstance(kwargs["case"], IncidentReport):
+                return analyze(**kwargs)
+            return AgentResult(reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True)
+
+        mocked_agent.side_effect = process
+        result = self.reporter.post("/api/chat/", {"message": "แจ้งเหตุอีกเรื่อง"},
+                                    content_type="application/json").json()
+        self.assertTrue(result["started_new"])
+        self.assertNotEqual(result["case"]["ticket_id"], self.case.pk)
+        self.assertEqual(mocked_agent.call_count, 2)
+        self.assertEqual(mocked_agent.call_args.kwargs["history"], "")
+        self.assertFalse(self.case.messages.exists())
 
     def test_close_case_and_save_coordinates_notifies_only_reporter(self):
         self.client.force_login(self.editor)
