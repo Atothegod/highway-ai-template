@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{% static 'chat/operations.css' %}">
   <script defer src="{% static 'chat/operations.js' %}"></script>
 </head>
-<body data-view="{{ active_view }}"{% if demo_mode %} data-demo-inbox-url="{% url 'operations_demo_conversations' %}"{% endif %} data-cases-url="{% if demo_mode %}{{ cases_url }}{% else %}{% url 'monitoring_cases' %}{% endif %}">
+<body data-view="{{ active_view }}" data-cases-url="{% url 'monitoring_cases' %}">
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></symbol>
     <symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16M6 8h.01M12 8h.01M18 8h.01"/></symbol>
@@ -24,18 +24,14 @@
   </svg>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="wordmark" href="{% if demo_mode %}{% url 'operations_demo' %}{% else %}{% url 'operations_dashboard' %}{% endif %}">
+      <a class="wordmark" href="{% url 'operations_dashboard' %}">
         <img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM" width="104" height="38">
         <span>Operations</span>
       </a>
       <div class="topbar-meta">
         {% include "chat/logout_button.html" %}
-        {% if demo_mode %}
-        <span>Demo · ข้อมูลตัวอย่าง</span>
-        {% else %}
         <a href="{% url 'monitoring' %}">รายการเคสทั้งหมด <span aria-hidden="true">↗</span></a>
         <span class="avatar" title="{{ request.user.get_username }}" aria-label="{{ request.user.get_username }}">{{ request.user.get_username|slice:":1"|upper }}</span>
-        {% endif %}
       </div>
     </div>
   </header>
@@ -76,7 +72,7 @@
       <div><p id="case-id" class="ticket-id"></p><h2 id="case-title"></h2></div>
       <form method="dialog"><button class="icon-button" aria-label="ปิดรายละเอียด" autofocus>×</button></form>
     </div>
-    {% if not demo_mode %}{% if active_view == 'map' or active_view == 'board' %}{% include 'chat/operations/case_editor.html' %}{% endif %}{% endif %}
+    {% if active_view == 'map' or active_view == 'board' %}{% include 'chat/operations/case_editor.html' %}{% endif %}
     <div id="case-details" class="case-details"></div>
   </dialog>
 </body>

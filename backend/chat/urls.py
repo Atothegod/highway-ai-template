@@ -1,17 +1,17 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from . import views
 
 urlpatterns = [
     path("", views.landing_page, name="landing"),
     path("chat/", views.chat_page, name="chat"),
     path("login/", views.chat_login, name="chat_login"),
-    path("operations/login/", views.operations_demo_login, name="operations_demo_login"),
-    path("operations/staff/login/", views.OperationsLoginView.as_view(), name="operations_login"),
-    path("operations/demo/", views.operations_demo, name="operations_demo"),
-    path("operations/demo/conversations/", views.operations_demo_conversations, name="operations_demo_conversations"),
-    path("api/operations/demo/conversations/<str:ticket_id>/", views.operations_demo_conversation, name="operations_demo_conversation"),
-    path("operations/demo/<str:view>/", views.operations_demo, name="operations_demo_view"),
-    path("api/operations/demo/cases/", views.operations_demo_cases, name="operations_demo_cases"),
+    path("operations/login/", views.OperationsLoginView.as_view(), name="operations_login"),
+    path("operations/staff/login/", RedirectView.as_view(pattern_name="operations_login", query_string=True)),
+    path("operations/demo/", RedirectView.as_view(pattern_name="operations_dashboard")),
+    path("operations/demo/board/", RedirectView.as_view(pattern_name="operations_board")),
+    path("operations/demo/map/", RedirectView.as_view(pattern_name="operations_map")),
+    path("operations/demo/conversations/", RedirectView.as_view(pattern_name="operations_conversations")),
     path("logout/", views.chat_logout, name="chat_logout"),
     path("monitor/", views.monitoring_page, name="monitoring"),
     path("operations/", views.operations_dashboard, name="operations_dashboard"),

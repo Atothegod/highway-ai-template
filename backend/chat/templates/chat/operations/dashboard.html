@@ -7,7 +7,7 @@
     <section class="panel" aria-labelledby="status-overview">
       <div class="panel-heading">
         <div><h2 id="status-overview">เคสตามสถานะ</h2><p>จำนวนเคสทั้งหมดในระบบ</p></div>
-        <a class="button" href="{% if demo_mode %}{% url 'operations_demo_view' 'board' %}{% else %}{% url 'operations_board' %}{% endif %}">เปิดบอร์ด <svg class="icon"><use href="#i-arrow"/></svg></a>
+        <a class="button" href="{% url 'operations_board' %}">เปิดบอร์ด <svg class="icon"><use href="#i-arrow"/></svg></a>
       </div>
       <div class="status-summary">
         <div class="status-line lane-open" data-summary="open">
@@ -27,7 +27,7 @@
     <section class="panel" aria-labelledby="recent-heading">
       <div class="panel-heading">
         <div><h2 id="recent-heading">เคสที่แจ้งล่าสุด</h2><p>เลือกเคสเพื่อดูรายละเอียด</p></div>
-        <a class="button" href="{% if demo_mode %}{% url 'operations_demo_view' 'map' %}{% else %}{% url 'operations_map' %}{% endif %}">เปิดแผนที่ <svg class="icon"><use href="#i-arrow"/></svg></a>
+        <a class="button" href="{% url 'operations_map' %}">เปิดแผนที่ <svg class="icon"><use href="#i-arrow"/></svg></a>
       </div>
       <div id="recent-cases" class="recent-cases"><p class="empty">กำลังโหลดเคส…</p></div>
     </section>

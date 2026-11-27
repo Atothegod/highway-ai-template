@@ -99,7 +99,6 @@
       send('reply');
     });
     modeButton.addEventListener('click', () => send(modeButton.value));
-    document.querySelector('#thread-simulate-user')?.addEventListener('click', () => send('simulate_user'));
   }
   load();
   setInterval(() => load(), 4000);

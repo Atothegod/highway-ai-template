@@ -19,11 +19,6 @@ class ChatLoginForm(forms.Form):
     )
 
 
-class OperationsDemoLoginForm(forms.Form):
-    username = forms.CharField(label="ชื่อผู้ใช้", max_length=150)
-    password = forms.CharField(label="รหัสผ่าน", max_length=256, strip=False, widget=forms.PasswordInput)
-
-
 class OperationsLoginForm(AuthenticationForm):
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
