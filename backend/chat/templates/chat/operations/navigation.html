@@ -2,5 +2,9 @@
         <a href="{% if demo_mode %}{% url 'operations_demo' %}{% else %}{% url 'operations_dashboard' %}{% endif %}" {% if active_view == 'dashboard' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-stack"/></svg>Dashboard</a>
         <a href="{% if demo_mode %}{% url 'operations_demo_view' 'map' %}{% else %}{% url 'operations_map' %}{% endif %}" {% if active_view == 'map' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-map"/></svg>Map</a>
         <a href="{% if demo_mode %}{% url 'operations_demo_view' 'board' %}{% else %}{% url 'operations_board' %}{% endif %}" {% if active_view == 'board' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-board"/></svg>Board</a>
-        {% if not demo_mode and perms.chat.view_chatmessage %}<a href="{% url 'operations_conversations' %}" {% if active_view == 'conversations' %}aria-current="page"{% endif %}>Conversations</a>{% endif %}
+        {% if demo_mode %}
+        <a href="{% url 'operations_demo_conversations' %}" {% if active_view == 'conversations' %}aria-current="page"{% endif %}>Conversations</a>
+        {% elif perms.chat.view_chatmessage %}
+        <a href="{% url 'operations_conversations' %}" {% if active_view == 'conversations' %}aria-current="page"{% endif %}>Conversations</a>
+        {% endif %}
       </nav>

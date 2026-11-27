@@ -34,6 +34,27 @@ class RoleLandingTests(TestCase):
         self.assertRedirects(self.client.post("/logout/"), "/")
         self.assertEqual(self.client.get("/api/operations/demo/cases/").status_code, 403)
 
+    def test_demo_conversation_replies_and_simulated_user_are_session_scoped(self):
+        path = "/api/operations/demo/conversations/DEMO-001/"
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.client.post("/operations/login/", {"username": "demo", "password": "example"})
+        self.assertContains(self.client.get("/operations/demo/board/"), "/operations/demo/conversations/")
+        self.assertContains(self.client.get("/operations/demo/conversations/", {"ticket": "DEMO-001"}),
+                            "จำลองผู้แจ้งตอบ")
+        self.assertEqual(len(self.client.get(path).json()["messages"]), 2)
+        self.assertEqual(self.client.post(path, {"action": "reply", "message": "กำลังตรวจสอบ"}).status_code, 200)
+        self.assertEqual(self.client.post(path, {"action": "simulate_user"}).status_code, 200)
+        thread = self.client.get(path).json()
+        self.assertTrue(thread["human_mode"])
+        self.assertEqual([m["role"] for m in thread["messages"]], ["user", "assistant", "staff", "user"])
+        self.assertEqual(thread["messages"][2]["content"], "กำลังตรวจสอบ")
+        self.assertEqual(self.client.get("/api/operations/demo/conversations/BEM-REAL/").status_code, 404)
+        self.assertEqual(self.client.post("/api/operations/demo/conversations/DEMO-003/",
+                                          {"action": "reply", "message": "ทดสอบ"}).status_code, 409)
+        other = self.client_class()
+        other.post("/operations/login/", {"username": "demo", "password": "example"})
+        self.assertEqual(len(other.get(path).json()["messages"]), 2)
+
     def test_operations_requires_staff_and_returns_to_requested_page(self):
         login_path = "/operations/staff/login/?next=/operations/board/"
         self.assertRedirects(self.client.get("/operations/board/"), login_path)

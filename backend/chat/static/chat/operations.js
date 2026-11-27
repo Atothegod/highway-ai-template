@@ -86,6 +86,7 @@
       ['หมวดหมู่', [incident.category_level_1, incident.category_level_2].filter(Boolean).join(' / ')],
       ['ผู้ติดต่อ', incident.contact],
     ];
+    const demoInbox = document.body.dataset.demoInboxUrl;
     byId('case-details').innerHTML = `
       <div class="detail-status"><span>${escape(incident.status_label)}</span>${priorityPill(incident)}</div>
       <dl class="detail-fields">${fields.map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value || '—')}</dd></div>`).join('')}</dl>
@@ -94,7 +95,8 @@
       ${incident.resolution_summary ? `<section class="detail-section"><h3>ผลการแก้ไข</h3><p>${escape(incident.resolution_summary)}</p></section>` : ''}
       ${incident.events.length ? `<section class="detail-section"><h3>ประวัติสถานะ</h3><ol class="detail-events">${incident.events.map((event) => `
         <li><time datetime="${escape(event.created_at)}">${date.format(new Date(event.created_at))}</time><br>
-        <strong>${escape(event.status_label)}</strong> · ${escape(event.message)}</li>`).join('')}</ol></section>` : ''}`;
+        <strong>${escape(event.status_label)}</strong> · ${escape(event.message)}</li>`).join('')}</ol></section>` : ''}
+      ${demoInbox ? `<a class="button" href="${escape(demoInbox)}?ticket=${encodeURIComponent(incident.ticket_id)}">เปิดบทสนทนา</a>` : ''}`;
     dialog.showModal();
     if (openEditor && editor && incident.update_url) editButton.click();
   }

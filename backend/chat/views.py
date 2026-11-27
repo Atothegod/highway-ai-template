@@ -192,6 +192,96 @@ def operations_demo_cases(request):
     return JsonResponse({"stats": stats, "cases": cases, "result_count": len(cases)})
 
 
+DEMO_INBOX_SESSION = "operations_demo_inbox"
+DEMO_REPORTERS = {
+    "DEMO-001": ("ผู้แจ้งตัวอย่าง A", "บันไดเลื่อนทางออก 2 หยุดทำงานค่ะ", "ตอนนี้ยังหยุดอยู่ค่ะ มีผู้โดยสารรอด้านล่าง"),
+    "DEMO-002": ("ผู้แจ้งตัวอย่าง B", "รถติดที่ช่องเก็บค่าผ่านทางช่อง 3 ครับ", "ตอนนี้รถเริ่มขยับ แต่ยังมีคิวอยู่ครับ"),
+    "DEMO-003": ("ผู้แจ้งตัวอย่าง C", "ป้ายตรงทางเดินไปชานชาลาอ่านไม่ออกค่ะ", "ได้รับแจ้งผลแล้วค่ะ ขอบคุณค่ะ"),
+}
+DEMO_AGENT_REPLY = "รับทราบครับ ผมบันทึกรายละเอียดไว้ให้เจ้าหน้าที่ตรวจสอบแล้วครับ"
+
+
+@never_cache
+@require_GET
+def operations_demo_conversations(request):
+    if not request.session.get(DEMO_SESSION):
+        return redirect("operations_demo_login")
+    search = request.GET.get("q", "").strip()[:150]
+    inbox = request.session.get(DEMO_INBOX_SESSION, {})
+    cases = [
+        (SimpleNamespace(pk=ticket, title=title, get_status_display=STATUS_LABELS[status],
+                         human_mode=inbox.get(ticket, {}).get("human_mode", False)), DEMO_REPORTERS[ticket][0])
+        for ticket, title, _, _, status, _, _ in DEMO_CASES
+    ]
+    items = [(case, name) for case, name in cases
+             if any(search.casefold() in value.casefold() for value in (case.pk, case.title, name))]
+    selected, reporter_name = next(
+        ((case, name) for case, name in cases if case.pk == request.GET.get("ticket")), (None, ""),
+    )
+    return render(request, "chat/operations/conversations.html", {
+        "active_view": "conversations", "demo_mode": True,
+        "page": Paginator(items, 40).get_page(request.GET.get("page")),
+        "conversations": items, "selected": selected, "reporter_name": reporter_name,
+        "search": search, "can_reply": True,
+    })
+
+
+@never_cache
+@require_http_methods(["GET", "POST"])
+def operations_demo_conversation(request, ticket_id):
+    if not request.session.get(DEMO_SESSION):
+        return JsonResponse({"error": "กรุณาเข้าสู่ Demo"}, status=403)
+    case = next((case for case in DEMO_CASES if case[0] == ticket_id), None)
+    if case is None:
+        raise Http404
+    closed = case[4] == "CLOSED"
+    inbox = request.session.get(DEMO_INBOX_SESSION, {})
+    state = inbox.get(ticket_id, {})
+    human_mode = state.get("human_mode", False)
+    additions = state.get("messages", [])
+    _, initial_message, simulated_reply = DEMO_REPORTERS[ticket_id]
+    messages = [
+        {"id": 1, "role": "user", "content": initial_message, "created_at": "2026-11-27T02:01:00Z"},
+        {"id": 2, "role": "assistant", "content": DEMO_AGENT_REPLY, "created_at": "2026-11-27T02:02:00Z"},
+    ]
+    if closed:
+        messages.append({"id": 3, "role": "staff", "content": "ทีมงานแก้ไขป้ายเรียบร้อยแล้วค่ะ",
+                         "created_at": "2026-11-27T03:00:00Z"})
+    messages.extend(additions)
+    if request.method == "GET":
+        try:
+            before = int(request.GET.get("before", 0))
+            after = int(request.GET.get("after", 0))
+        except ValueError:
+            return JsonResponse({"error": "หมายเลขข้อความไม่ถูกต้อง"}, status=400)
+        matches = [m for m in messages if m["id"] > after and (not before or m["id"] < before)]
+        return JsonResponse({"messages": matches[-100:], "has_older": len(matches) > 100,
+                             "human_mode": human_mode, "closed": closed})
+
+    if closed:
+        return JsonResponse({"error": "เคสนี้ปิดแล้ว"}, status=409)
+    action = request.POST.get("action")
+    message = request.POST.get("message", "").strip()
+    if action not in {"reply", "take_over", "resume", "simulate_user"} or (
+        action == "reply" and not 1 <= len(message) <= 4000
+    ):
+        return JsonResponse({"error": "คำสั่งไม่ถูกต้องหรือข้อความอยู่นอกช่วง 1–4,000 ตัวอักษร"}, status=400)
+    if action != "simulate_user":
+        human_mode = action != "resume"
+    if action in {"reply", "simulate_user"}:
+        next_id = messages[-1]["id"] + 1
+        now = timezone.now().isoformat()
+        is_staff_reply = action == "reply"
+        additions.append({"id": next_id, "role": "staff" if is_staff_reply else "user",
+                          "content": message if is_staff_reply else simulated_reply, "created_at": now})
+        if not is_staff_reply and not human_mode:
+            additions.append({"id": next_id + 1, "role": "assistant",
+                              "content": DEMO_AGENT_REPLY, "created_at": now})
+    inbox[ticket_id] = {"human_mode": human_mode, "messages": additions[-100:]}
+    request.session[DEMO_INBOX_SESSION] = inbox
+    return JsonResponse({"ok": True})
+
+
 class OperationsLoginView(LoginView):
     template_name = "chat/login.html"
     authentication_form = OperationsLoginForm

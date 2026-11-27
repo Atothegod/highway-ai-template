@@ -12,7 +12,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="wordmark" href="{% url 'operations_dashboard' %}">
+      <a class="wordmark" href="{% if demo_mode %}{% url 'operations_demo' %}{% else %}{% url 'operations_dashboard' %}{% endif %}">
         <img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM" width="104" height="38">
         <span>Operations</span>
       </a>
@@ -21,6 +21,7 @@
   </header>
   <main class="workspace">
     <h1>Conversations</h1>
+    {% if demo_mode %}<p>Demo · ข้อความและผู้แจ้งเป็นข้อมูลตัวอย่าง</p>{% endif %}
     <div class="toolbar">{% include "chat/operations/navigation.html" %}</div>
     <div class="inbox">
       <section class="thread-list" aria-label="รายการบทสนทนา">
@@ -48,7 +49,7 @@
         {% endif %}
       </section>
       {% if selected %}
-        <section class="thread" data-url="{% url 'operations_conversation' selected.pk %}" data-reporter="{{ reporter_name }}">
+        <section class="thread" data-url="{% if demo_mode %}{% url 'operations_demo_conversation' selected.pk %}{% else %}{% url 'operations_conversation' selected.pk %}{% endif %}" data-reporter="{{ reporter_name }}">
           <header class="thread-heading">
             <div>
               <h2>{{ reporter_name|default:"ไม่ทราบชื่อผู้แจ้ง" }}</h2>
@@ -67,6 +68,7 @@
               <textarea id="reply-message" name="message" rows="3" maxlength="4000" required></textarea>
               <div class="thread-actions">
                 <button id="thread-mode-change" class="button" type="button"></button>
+                {% if demo_mode %}<button id="thread-simulate-user" class="button" type="button">จำลองผู้แจ้งตอบ</button>{% endif %}
                 <button class="button primary" type="submit">ส่งข้อความ</button>
               </div>
             </form>
