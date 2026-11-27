@@ -8,11 +8,28 @@
   <style>
     :root{--navy:#07365f;--navy2:#0b4a7d;--cyan:#09a7c5;--cyan-soft:#e8f9fc;--ink:#172536;--muted:#697888;--line:#dce6ed;--bg:#eef4f7;--white:#fff;--green:#178454;--amber:#c77908;--red:#ca3b38;--shadow:0 18px 50px rgba(7,54,95,.12)}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(145deg,#eaf2f6,#f8fbfc);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif}.topbar{height:76px;background:#fff;color:var(--ink);display:flex;align-items:center;padding:0 clamp(18px,4vw,54px);gap:16px;border-bottom:3px solid #b39a59;box-shadow:0 4px 18px #07365f18}.logo{width:150px;display:flex;align-items:center}.logo img{display:block;width:100%;height:auto}.brand{padding-left:16px;border-left:1px solid var(--line)}.brand strong{display:block;font-size:18px;color:var(--navy)}.brand small{color:#8b7a4c}.secure{margin-left:auto;max-width:35%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:13px}.layout{max-width:1280px;height:calc(100vh - 76px);min-height:650px;margin:auto;padding:24px;display:grid;grid-template-columns:310px minmax(0,1fr);gap:20px}.side,.chat{background:var(--white);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.side{padding:22px;overflow:auto}.profile{display:flex;gap:13px;align-items:center}.avatar{width:48px;height:48px;flex:none;border-radius:16px;background:linear-gradient(145deg,#dff6fb,#e8edf2);border:1px solid #cae3e9;overflow:hidden;display:grid;place-items:center}.avatar img,.bot-dot img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}.profile strong{display:block}.online{font-size:12px;color:var(--green)}.persona{margin:14px 0 0;padding:13px;border-radius:13px;background:var(--cyan-soft);color:#31536a;font-size:12px;line-height:1.55}.persona b{display:block;color:var(--navy);margin-bottom:3px}.section{padding:19px 0;border-bottom:1px solid var(--line)}.label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:9px}.ticket{font-weight:800;color:var(--navy);word-break:break-all}.empty{color:var(--muted);font-size:13px}.pill{display:inline-flex;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:750;background:#edf2f6;color:#506070}.pill.OPEN{background:#e9f7ef;color:var(--green)}.pill.IN_PROGRESS{background:#fff3df;color:var(--amber)}.pill.CLOSED{background:#eef1f4;color:#536171}.taxonomy{font-size:13px;line-height:1.55}.taxonomy b{display:block;color:var(--navy)}.timeline{display:grid;gap:12px}.event{position:relative;padding-left:18px;font-size:12px;color:var(--muted)}.event:before{content:"";position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 4px var(--cyan-soft)}.event b{display:block;color:var(--ink);font-size:13px}.new{width:100%;border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:12px;padding:11px;font-weight:750;cursor:pointer;margin-top:18px}.chat{display:flex;flex-direction:column;min-width:0}.chat-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}.chat-head h1{font-size:17px;margin:0}.chat-head p{font-size:12px;color:var(--muted);margin:2px 0 0}.flow{margin-left:auto;text-align:right}.flow small{display:block;color:var(--muted)}#messages{flex:1;overflow:auto;padding:26px;background:linear-gradient(#f9fbfc,#f5f9fb)}.row{display:flex;gap:9px;margin-bottom:17px}.row.user{justify-content:flex-end}.bot-dot{width:30px;height:30px;flex:none;border-radius:10px;background:#e8f3f6;border:1px solid #cfdee5;overflow:hidden}.bubble{max-width:min(76%,650px);padding:12px 15px;background:#fff;border:1px solid var(--line);border-radius:5px 17px 17px;line-height:1.6;white-space:pre-wrap;box-shadow:0 3px 12px #173b5710}.user .bubble{background:var(--navy2);border-color:var(--navy2);color:#fff;border-radius:17px 5px 17px 17px}.composer{padding:17px 20px;border-top:1px solid var(--line);background:#fff}.safety{font-size:11px;color:var(--muted);margin:0 0 10px}.form{display:flex;gap:10px}.form input{flex:1;min-width:0;border:1px solid #cbd8e1;border-radius:13px;padding:13px 15px;font:inherit;outline:none}.form input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-soft)}.form button{border:0;border-radius:13px;background:var(--cyan);color:#fff;padding:0 24px;font-weight:800;cursor:pointer}.form button:disabled{opacity:.55}.toast-wrap{position:fixed;right:22px;top:92px;z-index:20;display:grid;gap:10px}.toast{width:min(360px,calc(100vw - 44px));padding:15px 16px;border-radius:15px;background:#fff;border-left:5px solid var(--cyan);box-shadow:0 15px 45px #07365f35;animation:enter .25s ease}.toast b{display:block;color:var(--navy)}.toast span{font-size:13px;color:var(--muted)}@keyframes enter{from{opacity:0;transform:translateY(-8px)}}
-    @media(max-width:850px){.topbar{height:66px}.secure{display:none}.layout{height:calc(100vh - 66px);min-height:0;padding:0;display:block}.side{display:none}.chat{height:100%;border:0;border-radius:0}.bubble{max-width:88%}.flow{display:none}}
+    .logout-form{flex:none;margin-left:auto}
+    .secure + .logout-form{margin-left:0}
+    .logout-form button{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--navy);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+    @media(max-width:850px){.topbar{height:66px}.secure{display:none}.secure + .logout-form{margin-left:auto}.layout{height:calc(100vh - 66px);min-height:0;padding:0;display:block}.side{display:none}.chat{height:100%;border:0;border-radius:0}.bubble{max-width:88%}.flow{display:none}}
+    #pin-open{margin-bottom:8px}#pin-dialog{width:min(460px,calc(100% - 24px));border:1px solid var(--line);border-radius:16px;padding:14px;color:var(--ink)}
+    #pin-dialog::backdrop{background:#17253688}#report-map{height:min(33vh,250px);border-radius:8px}
+    .pin-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.pin-controls label{flex:1;min-width:0}.pin-controls input{width:100%;padding:6px}
+    #pin-open,.pin-controls button{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--navy);padding:6px 10px;cursor:pointer}
   </style>
+  {% include "chat/operations/leaflet_assets.html" %}
+  <script defer src="{% static 'chat/report-pin.js' %}"></script>
 </head>
 <body>
-  <header class="topbar"><a class="logo" href="https://www.bemplc.co.th/" target="_blank" rel="noopener"><img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM — Bangkok Expressway and Metro"></a><div class="brand"><strong>BEM Incident Reporting</strong><small>ระบบรับแจ้งเหตุทางด่วนและรถไฟฟ้า</small></div><div class="secure">ชื่อผู้ใช้ {{ username }}</div></header>
+  <header class="topbar">
+    <a class="logo" href="https://www.bemplc.co.th/" target="_blank" rel="noopener"><img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM — Bangkok Expressway and Metro"></a>
+    <div class="brand"><strong>BEM Incident Reporting</strong><small>ระบบรับแจ้งเหตุทางด่วนและรถไฟฟ้า</small></div>
+    <div class="secure">ชื่อผู้ใช้ {{ username }}</div>
+    <form class="logout-form" method="post" action="{% url 'chat_logout' %}">
+      {% csrf_token %}
+      <button type="submit">ออกจากระบบ</button>
+    </form>
+  </header>
   <main class="layout">
     <aside class="side">
       <div class="profile"><div class="avatar"><img src="{% static 'chat/bem-care-agent.png' %}" alt="BEM Care ผู้ช่วยรับแจ้งเหตุ"></div><div><strong>{{ agent.name }}</strong><span class="online">● พร้อมรับแจ้งเหตุ</span></div></div>
@@ -26,9 +43,26 @@
     <section class="chat">
       <div class="chat-head"><div class="avatar"><img src="{% static 'chat/bem-care-agent.png' %}" alt="BEM Care"></div><div><h1>BEM Care</h1><p>ผู้ช่วยชายสำหรับรับแจ้งเหตุทางพิเศษและรถไฟฟ้า</p></div><div class="flow"><small>ขั้นตอน</small><strong id="flow">รอรับแจ้ง</strong></div></div>
       <div id="messages"></div>
-      <div class="composer"><p class="safety">หากมีอันตรายเร่งด่วน โปรดออกจากพื้นที่เสี่ยง แจ้งเจ้าหน้าที่ใกล้จุดเกิดเหตุ และติดต่อบริการฉุกเฉินทันที</p><form id="chat-form" class="form"><input id="message" required autocomplete="off" maxlength="4000" placeholder="เล่าเหตุที่พบ สถานที่ และเวลาที่เกิดเหตุ…"><button id="send" type="submit">ส่ง</button></form></div>
+      <div class="composer"><p class="safety">หากมีอันตรายเร่งด่วน โปรดออกจากพื้นที่เสี่ยง แจ้งเจ้าหน้าที่ใกล้จุดเกิดเหตุ และติดต่อบริการฉุกเฉินทันที</p><button id="pin-open" type="button" hidden>ปักหมุดจุดเกิดเหตุ</button><form id="chat-form" class="form"><input id="message" required autocomplete="off" maxlength="4000" placeholder="เล่าเหตุที่พบ สถานที่ และเวลาที่เกิดเหตุ…"><button id="send" type="submit">ส่ง</button></form></div>
     </section>
   </main>
+  <dialog id="pin-dialog" aria-labelledby="pin-title" data-url="{% url 'chat_pin' %}">
+    <strong id="pin-title">ปักหมุดจุดเกิดเหตุ</strong>
+    <p id="pin-location" class="empty"></p>
+    <div id="report-map" aria-label="แผนที่จุดเกิดเหตุ"></div>
+    <form id="pin-form">
+      <div class="pin-controls">
+        <label>ละติจูด <input name="latitude" type="number" min="-90" max="90" step="0.000001" required></label>
+        <label>ลองจิจูด <input name="longitude" type="number" min="-180" max="180" step="0.000001" required></label>
+      </div>
+      <p id="pin-feedback" class="empty" role="status"></p>
+      <div class="pin-controls">
+        <button type="button" id="pin-gps">ใช้ตำแหน่งของฉัน</button>
+        <button type="button" id="pin-cancel">ยกเลิก</button>
+        <button type="submit">บันทึกหมุด</button>
+      </div>
+    </form>
+  </dialog>
   <div id="toasts" class="toast-wrap"></div>
 <script>
 const box=document.querySelector('#messages'),form=document.querySelector('#chat-form'),input=document.querySelector('#message'),send=document.querySelector('#send');
@@ -45,8 +79,15 @@ async function chatFetch(url,options){
   return response;
 }
 function add(role,text){const row=document.createElement('div');row.className=`row ${role}`;if(role==='assistant'){const icon=document.createElement('div');icon.className='bot-dot';const avatar=document.createElement('img');avatar.src=agentAvatar;avatar.alt='BEM Care';icon.appendChild(avatar);row.appendChild(icon)}const bubble=document.createElement('div');bubble.className='bubble';bubble.textContent=text;row.appendChild(bubble);box.appendChild(row);box.scrollTop=box.scrollHeight}
-function resetView(){box.innerHTML='';add('assistant',greeting);ticket.textContent='เริ่มสนทนาเพื่อเปิดเคส';ticket.className='empty';statusEl.textContent='ยังไม่เปิดเคส';statusEl.className='pill';taxonomy.textContent='ระบบจะจำแนกประเภทจากรายละเอียดเหตุ';taxonomy.className='taxonomy empty';timeline.innerHTML='<span class="empty">ยังไม่มีการอัปเดต</span>';flow.textContent='รอรับแจ้ง'}
-function renderCase(item){if(!item)return;ticket.textContent=item.ticket_id;ticket.className='ticket';statusEl.textContent=item.status_label;statusEl.className=`pill ${item.status}`;flow.textContent=item.flow_label;if(item.category_level_1||item.category_level_2){taxonomy.className='taxonomy';taxonomy.innerHTML='';const l1=document.createElement('b');l1.textContent=item.category_level_1||'—';const l2=document.createElement('span');l2.textContent=item.category_level_2||'กำลังจำแนกกลุ่ม';taxonomy.append(l1,l2)}}
+let pinCase=null;
+function resetView(){renderPinCase(null);box.innerHTML='';add('assistant',greeting);ticket.textContent='เริ่มสนทนาเพื่อเปิดเคส';ticket.className='empty';statusEl.textContent='ยังไม่เปิดเคส';statusEl.className='pill';taxonomy.textContent='ระบบจะจำแนกประเภทจากรายละเอียดเหตุ';taxonomy.className='taxonomy empty';timeline.innerHTML='<span class="empty">ยังไม่มีการอัปเดต</span>';flow.textContent='รอรับแจ้ง'}
+function renderPinCase(item){
+  pinCase=item;
+  const button=document.querySelector('#pin-open');
+  button.hidden=!item||item.status==='CLOSED';
+  button.textContent=item?.pin?'แก้ไขหมุดจุดเกิดเหตุ':'ปักหมุดจุดเกิดเหตุ';
+}
+function renderCase(item){if(!item)return;renderPinCase(item);ticket.textContent=item.ticket_id;ticket.className='ticket';statusEl.textContent=item.status_label;statusEl.className=`pill ${item.status}`;flow.textContent=item.flow_label;if(item.category_level_1||item.category_level_2){taxonomy.className='taxonomy';taxonomy.innerHTML='';const l1=document.createElement('b');l1.textContent=item.category_level_1||'—';const l2=document.createElement('span');l2.textContent=item.category_level_2||'กำลังจำแนกกลุ่ม';taxonomy.append(l1,l2)}}
 function appendEvent(event){if(timeline.querySelector('.empty'))timeline.innerHTML='';const el=document.createElement('div');el.className='event';const title=document.createElement('b');title.textContent=`${event.status_label} · ${event.ticket_id}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);timeline.appendChild(el);lastEventId=Math.max(lastEventId,event.id)}
 function notify(event){const el=document.createElement('div');el.className='toast';const title=document.createElement('b');title.textContent=`อัปเดต ${event.ticket_id}: ${event.status_label}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);document.querySelector('#toasts').appendChild(el);setTimeout(()=>el.remove(),6500)}
 async function bootstrap(){resetView();try{const response=await chatFetch('/api/chat/state/');const data=await response.json();lastEventId=data.cursor||0;if(data.messages.length){box.innerHTML='';data.messages.forEach(item=>add(item.role,item.content))}if(!data.case)return;renderCase(data.case);data.events.forEach(event=>{const cursor=lastEventId;appendEvent(event);lastEventId=Math.max(cursor,lastEventId)})}catch(error){add('assistant','ไม่สามารถโหลดข้อมูลการสนทนาได้ กรุณาลองใหม่อีกครั้ง')}}

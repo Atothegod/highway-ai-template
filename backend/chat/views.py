@@ -1,7 +1,12 @@
 import json
+import os
 import re
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 from types import SimpleNamespace
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from django.db import transaction
 from django.contrib.admin.views.decorators import staff_member_required
@@ -84,6 +89,11 @@ def _case_data(case):
         "description": case.description,
         "service_area": case.service_area,
         "location": case.location,
+        "pin": [float(case.latitude), float(case.longitude)] if (
+            case.latitude is not None and case.longitude is not None
+        ) else None,
+        "pin_hint": _case_coordinates(case),
+        "submitted_at": case.submitted_at.isoformat() if case.submitted_at else None,
         "occurred_at": case.occurred_at,
         "impact": case.impact,
         "contact": case.contact,
@@ -117,6 +127,14 @@ def chat_login(request):
         }
         return redirect("chat")
     return render(request, "chat/login.html", {"form": form})
+
+
+@never_cache
+@require_POST
+def chat_logout(request):
+    for key in (CHAT_IDENTITY, "current_ticket_id", "pre_case_history"):
+        request.session.pop(key, None)
+    return redirect("chat_login")
 
 
 @never_cache
@@ -257,6 +275,49 @@ def chat_state(request):
     })
 
 
+@require_http_methods(["GET", "POST"])
+@chat_session_required
+def chat_pin(request):
+    case = _current_case(request)
+    if not case or request.GET.get("ticket_id") != case.pk:
+        return JsonResponse({"error": "ไม่พบเคสปัจจุบัน"}, status=404)
+
+    if request.method == "GET":
+        hint = _case_coordinates(case)
+        endpoint = os.getenv("INCIDENT_GEOCODER_URL")
+        if hint is None and endpoint and case.location:
+            query = urlencode({"q": case.location, "format": "jsonv2", "limit": 1, "countrycodes": "th"})
+            try:
+                req = Request(f"{endpoint}?{query}", headers={"User-Agent": "BEM-Incident-Reporting"})
+                with urlopen(req, timeout=3) as response:
+                    results = json.load(response)
+                if results:
+                    lat, lon = float(results[0]["lat"]), float(results[0]["lon"])
+                    if -90 <= lat <= 90 and -180 <= lon <= 180:
+                        hint = [lat, lon]
+            except (URLError, OSError, ValueError, TypeError, KeyError, IndexError):
+                pass
+        return JsonResponse({"hint": hint})
+
+    try:
+        data = json.loads(request.body)
+        lat, lon = Decimal(str(data["latitude"])), Decimal(str(data["longitude"]))
+        if not (lat.is_finite() and lon.is_finite() and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError
+        case.latitude = lat.quantize(Decimal("0.000001"))
+        case.longitude = lon.quantize(Decimal("0.000001"))
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return JsonResponse({"error": "กรุณาระบุพิกัดที่ถูกต้องทั้งสองค่า"}, status=400)
+
+    changed = IncidentReport.objects.filter(pk=case.pk).exclude(status=IncidentReport.Status.CLOSED).update(
+        latitude=case.latitude, longitude=case.longitude, updated_at=timezone.now(),
+    )
+    if not changed:
+        return JsonResponse({"error": "เคสนี้ปิดแล้ว"}, status=409)
+    case.refresh_from_db()
+    return JsonResponse({"case": _case_data(case)})
+
+
 @require_POST
 @chat_session_required
 def chat_api(request):
@@ -313,10 +374,20 @@ def chat_api(request):
     update_fields = ("category_level_1", "category_level_2", "title", "description", "service_area",
                      "location", "occurred_at", "impact", "contact", "urgency")
     with transaction.atomic():
+        case = IncidentReport.objects.select_for_update().get(pk=case.pk)
+        changed_fields = ["updated_at"]
+        if case.flow_state != IncidentReport.FlowState.SUBMITTED:
+            if result.flow_state == IncidentReport.FlowState.SUBMITTED:
+                if case.latitude is None or case.longitude is None:
+                    result.flow_state = IncidentReport.FlowState.CONFIRMING
+                    result.reply = "กรุณากด “ปักหมุดจุดเกิดเหตุ” แล้วส่งข้อความยืนยันอีกครั้งครับ"
+                else:
+                    case.submitted_at = timezone.now()
+                    changed_fields.append("submitted_at")
+            case.flow_state = result.flow_state
+            changed_fields.append("flow_state")
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.USER, content=message)
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.ASSISTANT, content=result.reply)
-        case.flow_state = result.flow_state
-        changed_fields = ["flow_state", "updated_at"]
         for field in update_fields:
             value = getattr(result, field)
             if value:

@@ -44,6 +44,7 @@ class IncidentReport(models.Model):
     impact = models.TextField(blank=True)
     contact = models.CharField(max_length=200, blank=True)
     urgency = models.CharField(max_length=20, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -80,6 +80,56 @@ class IncidentFlowTests(TestCase):
         self.assertEqual(case.messages.count(), 2)
         self.assertEqual(case.status_events.get().status, IncidentReport.Status.OPEN)
 
+    @patch.dict("os.environ", {"INCIDENT_GEOCODER_URL": "https://maps.example.test/search"})
+    @patch("chat.views.urlopen")
+    def test_map_starts_at_reported_place_without_saving_suggestion(self, geocoder):
+        session = self.client.session
+        case = IncidentReport.objects.create(session_key=session.session_key, location="สถานีสุขุมวิท")
+        session["current_ticket_id"] = case.pk
+        session.save()
+        geocoder.return_value.__enter__.return_value.read.return_value = (
+            '[{"lat":"13.737","lon":"100.561"}]'
+        )
+
+        response = self.client.get("/api/chat/pin/", {"ticket_id": case.pk})
+
+        self.assertEqual(response.json()["hint"], [13.737, 100.561])
+        self.assertIn("countrycodes=th", geocoder.call_args.args[0].full_url)
+        case.refresh_from_db()
+        self.assertIsNone(case.latitude)
+        self.assertIsNone(case.longitude)
+
+    @patch("chat.views.run_agent")
+    def test_submission_requires_confirmed_pin_and_stamps_once(self, mocked_agent):
+        session = self.client.session
+        case = IncidentReport.objects.create(session_key=session.session_key, location="13.75, 100.50")
+        session["current_ticket_id"] = case.pk
+        session.save()
+        pin_url = f"/api/chat/pin/?ticket_id={case.pk}"
+        self.assertEqual(self.client.get(pin_url).json()["hint"], [13.75, 100.50])
+
+        mocked_agent.side_effect = lambda **kwargs: AgentResult(reply="รับเรื่องแล้วครับ", flow_state="SUBMITTED")
+        payload = {"message": "ยืนยัน"}
+        self.assertEqual(self.client.post("/api/chat/", payload, content_type="application/json").json()
+                         ["case"]["flow_state"], "CONFIRMING")
+        case.refresh_from_db()
+        self.assertIsNone(case.submitted_at)
+
+        other = self.client_class()
+        other.post("/login/", {"username": "other", "pdpa_consent": "on"})
+        coords = {"latitude": "13.751234", "longitude": "100.501234"}
+        self.assertEqual(other.post(pin_url, coords, content_type="application/json").status_code, 404)
+        self.assertEqual(self.client.post(pin_url, {**coords, "latitude": "91"},
+                                          content_type="application/json").status_code, 400)
+        saved = self.client.post(pin_url, coords, content_type="application/json")
+        self.assertEqual(saved.json()["case"]["pin"], [13.751234, 100.501234])
+
+        submitted = self.client.post("/api/chat/", payload, content_type="application/json").json()["case"]
+        self.assertEqual(submitted["flow_state"], "SUBMITTED")
+        self.assertIsNotNone(submitted["submitted_at"])
+        retried = self.client.post("/api/chat/", payload, content_type="application/json").json()["case"]
+        self.assertEqual(retried["submitted_at"], submitted["submitted_at"])
+
     @patch("chat.views.run_agent")
     def test_session_cannot_read_another_sessions_ticket(self, mocked_agent):
         mocked_agent.return_value = AgentResult(

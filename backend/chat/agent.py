@@ -73,6 +73,8 @@ class BEMIncidentSignature(dspy.Signature):
     - COLLECTING: เก็บเฉพาะสาระสำคัญที่ยังขาด ได้แก่ บริการ/พื้นที่, ตำแหน่ง,
       วันเวลา, ผลกระทบหรือผู้ได้รับอันตราย และช่องทางติดต่อ (ช่องทางติดต่อเป็นข้อมูลสมัครใจ)
     - CONFIRMING: เมื่อข้อมูลจำเป็นครบ ให้สรุปเป็นข้อสั้นๆ พร้อม taxonomy 2 ระดับ แล้วถามยืนยัน
+    ถ้ายังไม่มีหมุด แนะนำให้กด “ปักหมุดจุดเกิดเหตุ” เพื่อเลือกตำแหน่งบนแผนที่ก่อนยืนยัน
+    ใช้ตำแหน่งที่ผู้แจ้งบอก เก็บชื่อสถานี ด่าน หรือจุดสังเกตตามจริง และห้ามเดาพิกัด
     - SUBMITTED: ใช้เมื่อผู้ใช้ยืนยันสรุปอย่างชัดเจนแล้วเท่านั้น กล่าวว่ารับเรื่องพร้อม Ticket ID
 
     ถามครั้งละไม่เกิน 2 คำถาม ไม่ถามซ้ำ ไม่แต่งข้อมูล ไม่อ้างว่าติดต่อเจ้าหน้าที่แล้ว
@@ -108,7 +110,10 @@ def _case_text(case) -> str:
         "flow_state", "category_level_1", "category_level_2", "title", "description",
         "service_area", "location", "occurred_at", "impact", "contact", "urgency",
     )
-    return "\n".join(f"{field}: {getattr(case, field) or '-'}" for field in fields)
+    details = [f"{field}: {getattr(case, field) or '-'}" for field in fields]
+    has_pin = getattr(case, "latitude", None) is not None and getattr(case, "longitude", None) is not None
+    details.append(f"map_pin_confirmed: {has_pin}")
+    return "\n".join(details)
 
 
 def _missing_fields(case) -> str:
