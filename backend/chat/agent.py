@@ -44,6 +44,7 @@ class AgentResult(BaseModel):
     service_area: str = ""
     location: str = ""
     occurred_at: str = ""
+    occurred_at_normalized: str = ""
     impact: str = ""
     contact: str = ""
     urgency: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
@@ -73,7 +74,7 @@ class BEMIncidentSignature(dspy.Signature):
     - COLLECTING: เก็บเฉพาะสาระสำคัญที่ยังขาด ได้แก่ บริการ/พื้นที่, ตำแหน่ง,
       วันเวลา, ผลกระทบหรือผู้ได้รับอันตราย และช่องทางติดต่อ (ช่องทางติดต่อเป็นข้อมูลสมัครใจ)
     - CONFIRMING: เมื่อข้อมูลจำเป็นครบ ให้สรุปเป็นข้อสั้นๆ พร้อม taxonomy 2 ระดับ แล้วถามยืนยัน
-    ถ้ายังไม่มีหมุด แนะนำให้กด “ปักหมุดจุดเกิดเหตุ” เพื่อเลือกตำแหน่งบนแผนที่ก่อนยืนยัน
+    ถ้ายังไม่มีหมุด แนะนำให้กด “เลือกบนแผนที่” ในการ์ดจุดเกิดเหตุเพื่อปักหมุดก่อนยืนยัน
     ใช้ตำแหน่งที่ผู้แจ้งบอก เก็บชื่อสถานี ด่าน หรือจุดสังเกตตามจริง และห้ามเดาพิกัด
     - SUBMITTED: ใช้เมื่อผู้ใช้ยืนยันสรุปอย่างชัดเจนแล้วเท่านั้น กล่าวว่ารับเรื่องพร้อม Ticket ID
 
@@ -99,7 +100,11 @@ class BEMIncidentSignature(dspy.Signature):
     description: str = dspy.OutputField(desc="ข้อเท็จจริงของเหตุ ห้ามคาดเดา")
     service_area: str = dspy.OutputField(desc="Expressway, Rail, Corporate หรือ Unknown")
     location: str = dspy.OutputField(desc="สถานี ด่าน ทางพิเศษ กม. ช่องทาง หรือจุดเกิดเหตุ")
-    occurred_at: str = dspy.OutputField(desc="วันเวลาที่เกิดเหตุตามที่ผู้ใช้แจ้ง")
+    occurred_at: str = dspy.OutputField(desc="วันเวลาที่เกิดเหตุตามที่ผู้ใช้แจ้ง เก็บข้อความต้นฉบับรวมถึงเวลาคร่าว ๆ")
+    occurred_at_normalized: str = dspy.OutputField(
+        desc="ISO 8601 พร้อม offset เมื่อผู้แจ้งระบุวันปฏิทินและเวลาได้ชัดเจนเท่านั้น "
+        "ใช้ +07:00 สำหรับเวลาท้องถิ่นไทย ถ้ารู้เพียงช่วงเวลาคร่าว ๆ หรือข้อมูลไม่ครบให้คืนค่าว่าง ห้ามเดา"
+    )
     impact: str = dspy.OutputField(desc="ผลกระทบ ผู้บาดเจ็บ หรือการหยุดชะงัก")
     contact: str = dspy.OutputField(desc="ช่องทางติดต่อที่ผู้ใช้สมัครใจให้")
     urgency: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = dspy.OutputField()
@@ -113,6 +118,8 @@ def _case_text(case) -> str:
     details = [f"{field}: {getattr(case, field) or '-'}" for field in fields]
     has_pin = getattr(case, "latitude", None) is not None and getattr(case, "longitude", None) is not None
     details.append(f"map_pin_confirmed: {has_pin}")
+    normalized = getattr(case, "occurred_at_normalized", None)
+    details.append(f"occurred_at_normalized: {normalized.isoformat() if normalized else '-'}")
     return "\n".join(details)
 
 

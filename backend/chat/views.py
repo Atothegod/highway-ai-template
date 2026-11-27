@@ -16,6 +16,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -95,6 +96,7 @@ def _case_data(case):
         "pin_hint": _case_coordinates(case),
         "submitted_at": case.submitted_at.isoformat() if case.submitted_at else None,
         "occurred_at": case.occurred_at,
+        "occurred_at_normalized": case.occurred_at_normalized.isoformat() if case.occurred_at_normalized else None,
         "impact": case.impact,
         "contact": case.contact,
         "urgency": case.urgency,
@@ -144,7 +146,15 @@ def chat_page(request):
     identity = _chat_identity(request)
     if not identity:
         return redirect("chat_login")
-    return render(request, "chat/index.html", {"agent": AGENT_PROFILE, "username": identity["username"]})
+    return render(request, "chat/index.html", {
+        "agent": AGENT_PROFILE,
+        "username": identity["username"],
+        "incident_tile_url": os.getenv("INCIDENT_MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+        "incident_tile_attribution": os.getenv(
+            "INCIDENT_MAP_ATTRIBUTION",
+            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ),
+    })
 
 
 @staff_member_required
@@ -380,7 +390,7 @@ def chat_api(request):
             if result.flow_state == IncidentReport.FlowState.SUBMITTED:
                 if case.latitude is None or case.longitude is None:
                     result.flow_state = IncidentReport.FlowState.CONFIRMING
-                    result.reply = "กรุณากด “ปักหมุดจุดเกิดเหตุ” แล้วส่งข้อความยืนยันอีกครั้งครับ"
+                    result.reply = "กรุณาเลือกจุดเกิดเหตุจากการ์ดนี้ แล้วส่งข้อความยืนยันอีกครั้งครับ"
                 else:
                     case.submitted_at = timezone.now()
                     changed_fields.append("submitted_at")
@@ -388,11 +398,23 @@ def chat_api(request):
             changed_fields.append("flow_state")
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.USER, content=message)
         ChatMessage.objects.create(incident=case, role=ChatMessage.Role.ASSISTANT, content=result.reply)
+        previous_occurrence = case.occurred_at
         for field in update_fields:
             value = getattr(result, field)
             if value:
                 setattr(case, field, value)
                 changed_fields.append(field)
+        if result.occurred_at:
+            try:
+                normalized = parse_datetime(result.occurred_at_normalized)
+            except ValueError:
+                normalized = None
+            if normalized is not None and timezone.is_aware(normalized):
+                case.occurred_at_normalized = normalized
+                changed_fields.append("occurred_at_normalized")
+            elif case.occurred_at != previous_occurrence:
+                case.occurred_at_normalized = None
+                changed_fields.append("occurred_at_normalized")
         case.save(update_fields=changed_fields)
 
     return JsonResponse({"reply": result.reply, "case": _case_data(case)})

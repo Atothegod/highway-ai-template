@@ -41,6 +41,15 @@ class IncidentReport(models.Model):
         validators=[MinValueValidator(-180), MaxValueValidator(180)],
     )
     occurred_at = models.CharField(max_length=120, blank=True)
+    occurred_at_normalized = models.DateTimeField("วันเวลาเกิดเหตุที่ระบุได้", null=True, blank=True)
+    assigned_team = models.CharField("ทีมรับผิดชอบ", max_length=120, blank=True)
+    assigned_at = models.DateTimeField("เวลามอบหมาย", null=True, blank=True)
+    sla_due_at = models.DateTimeField("กำหนด SLA", null=True, blank=True)
+    resolution_summary = models.TextField("ผลการแก้ไข", blank=True)
+    grc_case_id = models.CharField("เลขเคส GRC", max_length=120, blank=True)
+    grc_handoff_status = models.CharField("สถานะส่งต่อ GRC", max_length=20, blank=True, choices=[
+        ("PENDING", "รอส่งต่อ"), ("SENT", "ส่งแล้ว"), ("ACCEPTED", "GRC รับเรื่อง"), ("FAILED", "ส่งไม่สำเร็จ"),
+    ])
     impact = models.TextField(blank=True)
     contact = models.CharField(max_length=200, blank=True)
     urgency = models.CharField(max_length=20, blank=True)

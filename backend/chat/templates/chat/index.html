@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>BEM Care — Incident Reporting</title>
   <style>
     :root{--navy:#07365f;--navy2:#0b4a7d;--cyan:#09a7c5;--cyan-soft:#e8f9fc;--ink:#172536;--muted:#697888;--line:#dce6ed;--bg:#eef4f7;--white:#fff;--green:#178454;--amber:#c77908;--red:#ca3b38;--shadow:0 18px 50px rgba(7,54,95,.12)}
@@ -12,10 +13,13 @@
     .secure + .logout-form{margin-left:0}
     .logout-form button{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--navy);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
     @media(max-width:850px){.topbar{height:66px}.secure{display:none}.secure + .logout-form{margin-left:auto}.layout{height:calc(100vh - 66px);min-height:0;padding:0;display:block}.side{display:none}.chat{height:100%;border:0;border-radius:0}.bubble{max-width:88%}.flow{display:none}}
-    #pin-open{margin-bottom:8px}#pin-dialog{width:min(460px,calc(100% - 24px));border:1px solid var(--line);border-radius:16px;padding:14px;color:var(--ink)}
-    #pin-dialog::backdrop{background:#17253688}#report-map{height:min(33vh,250px);border-radius:8px}
-    .pin-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.pin-controls label{flex:1;min-width:0}.pin-controls input{width:100%;padding:6px}
-    #pin-open,.pin-controls button{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--navy);padding:6px 10px;cursor:pointer}
+    #pin-card{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);white-space:normal}
+    #pin-card p{margin:4px 0 8px}.pin-bubble:has(#pin-card){width:min(100%,440px)}
+    #report-map{height:clamp(155px,28vh,245px);border-radius:10px;margin:8px 0}
+    .pin-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.pin-controls label{flex:1;min-width:0}
+    .pin-controls input{width:100%;padding:6px}.pin-manual{font-size:12px;color:var(--muted);margin-top:8px}
+    #pin-card button{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--navy);padding:6px 10px;cursor:pointer;font:inherit;font-size:13px}
+    #pin-card button[type=submit]{background:var(--navy);color:#fff}#pin-card button:disabled{opacity:.5}
   </style>
   {% include "chat/operations/leaflet_assets.html" %}
   <script defer src="{% static 'chat/report-pin.js' %}"></script>
@@ -43,26 +47,32 @@
     <section class="chat">
       <div class="chat-head"><div class="avatar"><img src="{% static 'chat/bem-care-agent.png' %}" alt="BEM Care"></div><div><h1>BEM Care</h1><p>ผู้ช่วยชายสำหรับรับแจ้งเหตุทางพิเศษและรถไฟฟ้า</p></div><div class="flow"><small>ขั้นตอน</small><strong id="flow">รอรับแจ้ง</strong></div></div>
       <div id="messages"></div>
-      <div class="composer"><p class="safety">หากมีอันตรายเร่งด่วน โปรดออกจากพื้นที่เสี่ยง แจ้งเจ้าหน้าที่ใกล้จุดเกิดเหตุ และติดต่อบริการฉุกเฉินทันที</p><button id="pin-open" type="button" hidden>ปักหมุดจุดเกิดเหตุ</button><form id="chat-form" class="form"><input id="message" required autocomplete="off" maxlength="4000" placeholder="เล่าเหตุที่พบ สถานที่ และเวลาที่เกิดเหตุ…"><button id="send" type="submit">ส่ง</button></form></div>
+      <div class="composer"><p class="safety">หากมีอันตรายเร่งด่วน โปรดออกจากพื้นที่เสี่ยง แจ้งเจ้าหน้าที่ใกล้จุดเกิดเหตุ และติดต่อบริการฉุกเฉินทันที</p><form id="chat-form" class="form"><input id="message" required autocomplete="off" maxlength="4000" placeholder="เล่าเหตุที่พบ สถานที่ และเวลาที่เกิดเหตุ…"><button id="send" type="submit">ส่ง</button></form></div>
     </section>
   </main>
-  <dialog id="pin-dialog" aria-labelledby="pin-title" data-url="{% url 'chat_pin' %}">
-    <strong id="pin-title">ปักหมุดจุดเกิดเหตุ</strong>
+  <div id="pin-card" hidden data-url="{% url 'chat_pin' %}" data-tiles="{{ incident_tile_url }}" data-attribution="{{ incident_tile_attribution }}">
+    <strong>จุดเกิดเหตุ</strong>
     <p id="pin-location" class="empty"></p>
-    <div id="report-map" aria-label="แผนที่จุดเกิดเหตุ"></div>
-    <form id="pin-form">
-      <div class="pin-controls">
-        <label>ละติจูด <input name="latitude" type="number" min="-90" max="90" step="0.000001" required></label>
-        <label>ลองจิจูด <input name="longitude" type="number" min="-180" max="180" step="0.000001" required></label>
-      </div>
-      <p id="pin-feedback" class="empty" role="status"></p>
-      <div class="pin-controls">
-        <button type="button" id="pin-gps">ใช้ตำแหน่งของฉัน</button>
-        <button type="button" id="pin-cancel">ยกเลิก</button>
-        <button type="submit">บันทึกหมุด</button>
-      </div>
-    </form>
-  </dialog>
+    <button id="pin-open" type="button" aria-expanded="false" aria-controls="pin-picker">เลือกบนแผนที่</button>
+    <div id="pin-picker" hidden>
+      <div id="report-map" aria-label="แผนที่จุดเกิดเหตุ"></div>
+      <form id="pin-form" novalidate>
+        <p id="pin-feedback" class="empty" role="status"></p>
+        <div class="pin-controls">
+          <button type="button" id="pin-gps">ใช้ GPS</button>
+          <button type="button" id="pin-cancel">ยกเลิก</button>
+          <button type="submit" disabled>บันทึกหมุด</button>
+        </div>
+        <details class="pin-manual">
+          <summary>กรอกพิกัดเอง</summary>
+          <div class="pin-controls">
+            <label>ละติจูด <input name="latitude" type="number" min="-90" max="90" step="0.000001" required></label>
+            <label>ลองจิจูด <input name="longitude" type="number" min="-180" max="180" step="0.000001" required></label>
+          </div>
+        </details>
+      </form>
+    </div>
+  </div>
   <div id="toasts" class="toast-wrap"></div>
 <script>
 const box=document.querySelector('#messages'),form=document.querySelector('#chat-form'),input=document.querySelector('#message'),send=document.querySelector('#send');
@@ -80,18 +90,39 @@ async function chatFetch(url,options){
 }
 function add(role,text){const row=document.createElement('div');row.className=`row ${role}`;if(role==='assistant'){const icon=document.createElement('div');icon.className='bot-dot';const avatar=document.createElement('img');avatar.src=agentAvatar;avatar.alt='BEM Care';icon.appendChild(avatar);row.appendChild(icon)}const bubble=document.createElement('div');bubble.className='bubble';bubble.textContent=text;row.appendChild(bubble);box.appendChild(row);box.scrollTop=box.scrollHeight}
 let pinCase=null;
+const pinCard=document.querySelector('#pin-card');
 function resetView(){renderPinCase(null);box.innerHTML='';add('assistant',greeting);ticket.textContent='เริ่มสนทนาเพื่อเปิดเคส';ticket.className='empty';statusEl.textContent='ยังไม่เปิดเคส';statusEl.className='pill';taxonomy.textContent='ระบบจะจำแนกประเภทจากรายละเอียดเหตุ';taxonomy.className='taxonomy empty';timeline.innerHTML='<span class="empty">ยังไม่มีการอัปเดต</span>';flow.textContent='รอรับแจ้ง'}
 function renderPinCase(item){
+  const previous=pinCase;
   pinCase=item;
+  const show=item&&item.status!=='CLOSED'&&(item.location||item.pin||item.flow_state==='CONFIRMING');
+  if(!show){
+    document.querySelector('#pin-cancel').click();
+    pinCard.hidden=true;
+    document.body.append(pinCard);
+    return;
+  }
   const button=document.querySelector('#pin-open');
-  button.hidden=!item||item.status==='CLOSED';
-  button.textContent=item?.pin?'แก้ไขหมุดจุดเกิดเหตุ':'ปักหมุดจุดเกิดเหตุ';
+  button.textContent=item.pin?'แก้ไขหมุด':'เลือกบนแผนที่';
+  document.querySelector('#pin-location').textContent=[item.location,item.pin?'บันทึกหมุดแล้ว':''].filter(Boolean).join(' · ');
+  if(pinCard.hidden||previous?.location!==item.location||previous?.ticket_id!==item.ticket_id){
+    document.querySelector('#pin-cancel').click();
+    const bubbles=box.querySelectorAll('.assistant .bubble');
+    const bubble=bubbles[bubbles.length-1];
+    pinCard.parentElement.classList.remove('pin-bubble');
+    bubble.append(pinCard);
+    bubble.classList.add('pin-bubble');
+    pinCard.hidden=false;
+    box.scrollTop=box.scrollHeight;
+  }
 }
 function renderCase(item){if(!item)return;renderPinCase(item);ticket.textContent=item.ticket_id;ticket.className='ticket';statusEl.textContent=item.status_label;statusEl.className=`pill ${item.status}`;flow.textContent=item.flow_label;if(item.category_level_1||item.category_level_2){taxonomy.className='taxonomy';taxonomy.innerHTML='';const l1=document.createElement('b');l1.textContent=item.category_level_1||'—';const l2=document.createElement('span');l2.textContent=item.category_level_2||'กำลังจำแนกกลุ่ม';taxonomy.append(l1,l2)}}
 function appendEvent(event){if(timeline.querySelector('.empty'))timeline.innerHTML='';const el=document.createElement('div');el.className='event';const title=document.createElement('b');title.textContent=`${event.status_label} · ${event.ticket_id}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);timeline.appendChild(el);lastEventId=Math.max(lastEventId,event.id)}
 function notify(event){const el=document.createElement('div');el.className='toast';const title=document.createElement('b');title.textContent=`อัปเดต ${event.ticket_id}: ${event.status_label}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);document.querySelector('#toasts').appendChild(el);setTimeout(()=>el.remove(),6500)}
 async function bootstrap(){resetView();try{const response=await chatFetch('/api/chat/state/');const data=await response.json();lastEventId=data.cursor||0;if(data.messages.length){box.innerHTML='';data.messages.forEach(item=>add(item.role,item.content))}if(!data.case)return;renderCase(data.case);data.events.forEach(event=>{const cursor=lastEventId;appendEvent(event);lastEventId=Math.max(cursor,lastEventId)})}catch(error){add('assistant','ไม่สามารถโหลดข้อมูลการสนทนาได้ กรุณาลองใหม่อีกครั้ง')}}
-form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;add('user',message);input.value='';send.disabled=true;try{const response=await chatFetch('/api/chat/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({message})});const data=await response.json();if(!response.ok)throw new Error(data.error||'เกิดข้อผิดพลาด');add('assistant',data.reply);renderCase(data.case)}catch(error){add('assistant',error.message)}finally{send.disabled=false;input.focus()}});
+form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;add('user',message);input.value='';send.disabled=true;try{const response=await chatFetch('/api/chat/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({message})});const data=await response.json();if(!response.ok)throw new Error(data.error||'เกิดข้อผิดพลาด');add('assistant',data.reply);
+if(data.case&&!data.case.pin&&data.case.flow_state==='CONFIRMING'&&document.querySelector('#pin-picker').hidden) pinCard.hidden=true;
+renderCase(data.case)}catch(error){add('assistant',error.message)}finally{send.disabled=false;input.focus()}});
 document.querySelector('#reset').addEventListener('click',async()=>{if(ticket.className==='ticket'&&!confirm('เริ่มแจ้งเหตุใหม่? เคสปัจจุบันยังติดตามต่อได้ด้วย Ticket ID เดิม'))return;const response=await chatFetch('/api/chat/reset/',{method:'POST',headers:{'X-CSRFToken':csrf()}}).catch(()=>null);if(!response?.ok)return;const data=await response.json();lastEventId=data.cursor||lastEventId;resetView();input.focus()});
 async function poll(){try{const response=await chatFetch(`/api/ticket/status/?after=${lastEventId}`);const data=await response.json();renderCase(data.case);data.events.forEach(event=>{appendEvent(event);notify(event)})}catch(error){/* retry on next interval */}}
 bootstrap().then(()=>setInterval(poll,7000));

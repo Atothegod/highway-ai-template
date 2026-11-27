@@ -1,11 +1,12 @@
-const pinDialog = document.querySelector('#pin-dialog');
+const pinPicker = document.querySelector('#pin-picker');
+const pinOpen = document.querySelector('#pin-open');
 const pinForm = document.querySelector('#pin-form');
 const pinFeedback = document.querySelector('#pin-feedback');
 const reportMapContainer = document.querySelector('#report-map');
 let reportMap, reportMarker, pinTicket, selectionVersion = 0;
 
 function pinUrl() {
-  return `${pinDialog.dataset.url}?ticket_id=${encodeURIComponent(pinTicket)}`;
+  return `${pinCard.dataset.url}?ticket_id=${encodeURIComponent(pinTicket)}`;
 }
 
 function showReportMarker(point) {
@@ -29,27 +30,42 @@ function pickReportPoint(point) {
   pinForm.elements.longitude.value = longitude.toFixed(6);
   showReportMarker([point[0], longitude]);
   pinFeedback.textContent = '';
+  pinForm.querySelector('[type=submit]').disabled = false;
 }
 
-document.querySelector('#pin-open').onclick = async () => {
-  if (!pinCase) return;
+pinOpen.onclick = async () => {
+  if (!pinCase || !pinPicker.hidden) return;
   const currentCase = pinCase;
   pinTicket = currentCase.ticket_id;
   pinForm.reset();
   const initial = currentCase.pin || currentCase.pin_hint;
-  document.querySelector('#pin-location').textContent = currentCase.location || 'เลือกจุดเกิดเหตุบนแผนที่';
-  pinDialog.showModal();
-  reportMapContainer.hidden = !window.L;
-  if (window.L) {
+  pinForm.querySelector('[type=submit]').disabled = true;
+  pinForm.querySelector('details').open = false;
+  pinPicker.hidden = false;
+  pinOpen.hidden = true;
+  pinOpen.setAttribute('aria-expanded', 'true');
+  reportMapContainer.hidden = !window.L || !pinCard.dataset.tiles;
+  if (!reportMapContainer.hidden) {
     reportMap = L.map(reportMapContainer, {scrollWheelZoom: false})
       .setView(initial || [13.7563, 100.5018], initial ? 16 : 11);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19,
+    const tiles = L.tileLayer(pinCard.dataset.tiles, {
+      attribution: pinCard.dataset.attribution, maxZoom: 19,
+      referrerPolicy: 'strict-origin-when-cross-origin',
     }).addTo(reportMap);
+    let loaded = false;
+    tiles.on('tileload', () => { loaded = true; });
+    tiles.on('load', () => {
+      if (loaded || !reportMap) return;
+      reportMap.remove();
+      reportMap = reportMarker = null;
+      reportMapContainer.hidden = true;
+      pinFeedback.textContent = 'แผนที่โหลดไม่ได้ ใช้ GPS หรือกรอกพิกัดได้';
+    });
     reportMap.on('click', ({latlng}) => pickReportPoint([latlng.lat, latlng.lng]));
   }
   if (initial) {
     pickReportPoint(initial);
+    pinFeedback.textContent = 'ตรวจจุดเกิดเหตุ แล้วกดบันทึกหมุด';
     return;
   }
   const version = ++selectionVersion;
@@ -58,7 +74,7 @@ document.querySelector('#pin-open').onclick = async () => {
     const response = await chatFetch(pinUrl());
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    if (!pinDialog.open || version !== selectionVersion) return;
+    if (pinPicker.hidden || version !== selectionVersion) return;
     if (data.hint) {
       pickReportPoint(data.hint);
       reportMap?.setView(data.hint, 16);
@@ -67,7 +83,7 @@ document.querySelector('#pin-open').onclick = async () => {
       pinFeedback.textContent = 'เลือกจุดเกิดเหตุเองบนแผนที่ หรือกรอกพิกัด';
     }
   } catch {
-    if (pinDialog.open && version === selectionVersion) {
+    if (!pinPicker.hidden && version === selectionVersion) {
       pinFeedback.textContent = 'ค้นตำแหน่งไม่สำเร็จ กรุณาเลือกจุดเกิดเหตุเองหรือกรอกพิกัด';
     }
   }
@@ -76,7 +92,9 @@ document.querySelector('#pin-open').onclick = async () => {
 pinForm.addEventListener('input', () => {
   selectionVersion++;
   const {latitude, longitude} = pinForm.elements;
-  if (latitude.validity.valid && longitude.validity.valid) {
+  const valid = latitude.validity.valid && longitude.validity.valid;
+  pinForm.querySelector('[type=submit]').disabled = !valid;
+  if (valid) {
     showReportMarker([latitude.valueAsNumber, longitude.valueAsNumber]);
     reportMap?.panTo([latitude.valueAsNumber, longitude.valueAsNumber]);
   }
@@ -88,25 +106,29 @@ document.querySelector('#pin-gps').onclick = () => {
   }
   const version = ++selectionVersion;
   navigator.geolocation.getCurrentPosition(({coords}) => {
-    if (!pinDialog.open || version !== selectionVersion) return;
+    if (pinPicker.hidden || version !== selectionVersion) return;
     const point = [coords.latitude, coords.longitude];
     pickReportPoint(point);
     reportMap?.setView(point, 16);
   }, () => {
-    if (pinDialog.open && version === selectionVersion) {
+    if (!pinPicker.hidden && version === selectionVersion) {
       pinFeedback.textContent = 'อ่านตำแหน่งไม่ได้ กรุณาเลือกจุดเอง';
     }
   }, {timeout: 8000});
 };
-document.querySelector('#pin-cancel').onclick = () => pinDialog.close();
-pinDialog.addEventListener('close', () => {
+function closePinPicker() {
   selectionVersion++;
   reportMap?.remove();
   reportMap = reportMarker = null;
-});
+  pinPicker.hidden = true;
+  pinOpen.hidden = false;
+  pinOpen.setAttribute('aria-expanded', 'false');
+}
+document.querySelector('#pin-cancel').onclick = closePinPicker;
 pinForm.addEventListener('submit', async event => {
   event.preventDefault();
   const button = event.submitter;
+  if (button.disabled || !pinForm.checkValidity()) return;
   button.disabled = true;
   selectionVersion++;
   try {
@@ -118,7 +140,8 @@ pinForm.addEventListener('submit', async event => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'บันทึกหมุดไม่สำเร็จ');
     if (pinCase?.ticket_id === data.case.ticket_id) renderCase(data.case);
-    pinDialog.close();
+    closePinPicker();
+    pinOpen.focus();
   } catch (error) {
     pinFeedback.textContent = error.message;
   } finally {

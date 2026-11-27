@@ -80,6 +80,22 @@ class IncidentFlowTests(TestCase):
         self.assertEqual(case.messages.count(), 2)
         self.assertEqual(case.status_events.get().status, IncidentReport.Status.OPEN)
 
+    @patch("chat.views.run_agent")
+    def test_occurrence_keeps_original_and_clears_stale_normalization(self, mocked_agent):
+        mocked_agent.return_value = AgentResult(
+            reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True,
+            occurred_at="27 พฤศจิกายน 2026 เวลา 14:30",
+            occurred_at_normalized="2026-11-27T14:30:00+07:00",
+        )
+        response = self.client.post("/api/chat/", {"message": "แจ้งเหตุ"}, content_type="application/json")
+        self.assertEqual(response.json()["case"]["occurred_at_normalized"], "2026-11-27T14:30:00+07:00")
+
+        mocked_agent.return_value.occurred_at = "ช่วงบ่าย ไม่ทราบเวลาแน่ชัด"
+        mocked_agent.return_value.occurred_at_normalized = ""
+        response = self.client.post("/api/chat/", {"message": "ขอแก้ไขเวลา"}, content_type="application/json")
+        self.assertIsNone(response.json()["case"]["occurred_at_normalized"])
+        self.assertEqual(IncidentReport.objects.get().occurred_at, "ช่วงบ่าย ไม่ทราบเวลาแน่ชัด")
+
     @patch.dict("os.environ", {"INCIDENT_GEOCODER_URL": "https://maps.example.test/search"})
     @patch("chat.views.urlopen")
     def test_map_starts_at_reported_place_without_saving_suggestion(self, geocoder):
