@@ -16,7 +16,7 @@ from django.contrib.sessions.models import Session
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -26,7 +26,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .agent import AGENT_PROFILE, run_agent
-from .forms import ChatLoginForm, OperationsCaseForm, OperationsLoginForm, OperationsMoveForm
+from .forms import ChatLoginForm, OperationsCaseForm, OperationsDemoLoginForm, OperationsLoginForm, OperationsMoveForm
 from .models import ChatMessage, IncidentReport, StatusEvent
 from .notifications import STATUS_MESSAGES, notify_case_status, status_chat_message
 from .routing import CATEGORY_CHOICES, POLICY, TEAM_CHOICES, TEAMS, apply_initial_routing
@@ -126,6 +126,70 @@ def _event_data(event):
 @require_GET
 def landing_page(request):
     return render(request, "chat/landing.html")
+
+
+DEMO_SESSION = "operations_demo"
+
+# Fictional cases only. Demo requests never read IncidentReport or ChatMessage.
+DEMO_CASES = (
+    ("DEMO-001", "บันไดเลื่อนหยุดทำงาน", "สถานีตัวอย่าง A", "Rail", "OPEN", "HIGH", (13.741, 100.553)),
+    ("DEMO-002", "ช่องเก็บค่าผ่านทางล่าช้า", "ด่านตัวอย่าง B", "Expressway", "IN_PROGRESS", "MEDIUM", (13.780, 100.520)),
+    ("DEMO-003", "ป้ายแนะนำเส้นทางชำรุด", "สถานีตัวอย่าง C", "Rail", "CLOSED", "LOW", (13.728, 100.534)),
+)
+
+
+@never_cache
+@require_http_methods(["GET", "POST"])
+def operations_demo_login(request):
+    if request.session.get(DEMO_SESSION):
+        return redirect("operations_demo")
+    form = OperationsDemoLoginForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        request.session[DEMO_SESSION] = True
+        return redirect("operations_demo")
+    return render(request, "chat/login.html", {
+        "form": form, "operations_login": True, "operations_demo": True,
+    })
+
+
+@never_cache
+@require_GET
+def operations_demo(request, view="dashboard"):
+    if view not in {"dashboard", "map", "board"}:
+        raise Http404
+    if not request.session.get(DEMO_SESSION):
+        return redirect("operations_demo_login")
+    return render(request, f"chat/operations/{view}.html", {
+        "active_view": view,
+        "demo_mode": True,
+        "cases_url": reverse("operations_demo_cases"),
+    })
+
+
+@never_cache
+@require_GET
+def operations_demo_cases(request):
+    if not request.session.get(DEMO_SESSION):
+        return JsonResponse({"error": "กรุณาเข้าสู่ Demo"}, status=403)
+    search = request.GET.get("q", "").strip().casefold()
+    status_filter = request.GET.get("status")
+    urgency_filter = request.GET.get("urgency")
+    stats = {"total": len(DEMO_CASES), "open": 0, "in_progress": 0, "closed": 0, "urgent": 0}
+    cases = []
+    for ticket, title, location, service, status, urgency, coordinates in DEMO_CASES:
+        stats[status.lower()] += 1
+        stats["urgent"] += urgency == "HIGH" and status != "CLOSED"
+        if search and not any(search in value.casefold() for value in (ticket, title, location)):
+            continue
+        if (status_filter and status_filter != status) or (urgency_filter and urgency_filter != urgency):
+            continue
+        cases.append({
+            "ticket_id": ticket, "title": title, "location": location, "service_area": service,
+            "status": status, "status_label": STATUS_LABELS[status], "urgency": urgency,
+            "coordinates": coordinates, "description": title, "events": [],
+            "created_at": "2026-11-27T02:00:00Z", "updated_at": "2026-11-27T03:00:00Z",
+        })
+    return JsonResponse({"stats": stats, "cases": cases, "result_count": len(cases)})
 
 
 class OperationsLoginView(LoginView):

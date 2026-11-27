@@ -14,8 +14,28 @@ class RoleLandingTests(TestCase):
             self.assertContains(response, f'href="{path}"')
         self.assertNotContains(response, "/admin/")
 
+    def test_arbitrary_demo_login_is_isolated_from_real_cases(self):
+        IncidentReport.objects.create(session_key="real-session", title="รายละเอียดจริง")
+        self.assertRedirects(self.client.get("/operations/demo/"), "/operations/login/")
+        response = self.client.post("/operations/login/", {"username": "ชื่อทดสอบ", "password": "อะไรก็ได้"})
+        self.assertRedirects(response, "/operations/demo/")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        page = self.client.get("/operations/demo/")
+        self.assertContains(page, "ข้อมูลตัวอย่าง")
+        self.assertNotContains(page, "/operations/conversations/")
+        self.assertEqual(self.client.get("/operations/demo/board/").status_code, 200)
+        self.assertEqual(self.client.get("/operations/demo/map/").status_code, 200)
+        feed = self.client.get("/api/operations/demo/cases/")
+        self.assertNotContains(feed, "รายละเอียดจริง")
+        self.assertTrue(all(c["ticket_id"].startswith("DEMO-") for c in feed.json()["cases"]))
+        self.assertEqual(self.client.post("/api/operations/demo/cases/").status_code, 405)
+        self.assertRedirects(self.client.get("/api/monitor/cases/"),
+                             "/operations/staff/login/?next=/api/monitor/cases/")
+        self.assertRedirects(self.client.post("/logout/"), "/")
+        self.assertEqual(self.client.get("/api/operations/demo/cases/").status_code, 403)
+
     def test_operations_requires_staff_and_returns_to_requested_page(self):
-        login_path = "/operations/login/?next=/operations/board/"
+        login_path = "/operations/staff/login/?next=/operations/board/"
         self.assertRedirects(self.client.get("/operations/board/"), login_path)
         users = get_user_model().objects
         users.create_user(username="visitor", password="test-pass")
@@ -58,7 +78,7 @@ class RoleLandingTests(TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
         self.assertNotEqual(self.client.session.session_key, session_key)
         self.assertRedirects(self.client.get("/chat/"), "/login/")
-        self.assertRedirects(self.client.get("/operations/"), "/operations/login/?next=/operations/")
+        self.assertRedirects(self.client.get("/operations/"), "/operations/staff/login/?next=/operations/")
 
 
 class ConversationsTests(TestCase):
@@ -337,7 +357,7 @@ class MonitoringTests(TestCase):
     def test_monitoring_requires_staff_login(self):
         response = self.client.get("/monitor/")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/operations/login/", response.url)
+        self.assertIn("/operations/staff/login/", response.url)
 
     def test_monitoring_api_returns_stats_and_filters(self):
         IncidentReport.objects.create(session_key="one", title="ลิฟต์ขัดข้อง", urgency="HIGH")

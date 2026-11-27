@@ -31,8 +31,13 @@
   <main>
     <div class="brand"><img src="{% static 'chat/bem-care-agent.png' %}" alt=""><strong>BEM Care</strong></div>
     {% if operations_login %}
+      {% if operations_demo %}
+      <h1>เข้าสู่ Operations Demo</h1>
+      <p>กรอกชื่อและรหัสผ่านตัวอย่างได้ตามต้องการ โดยไม่ต้องใช้บัญชีจริง</p>
+      {% else %}
       <h1>เข้าสู่ระบบ Operations</h1>
       <p>ใช้บัญชีเจ้าหน้าที่เพื่อเข้าดูและจัดการเคส</p>
+      {% endif %}
       <form method="post">
         {% csrf_token %}
         {{ form.non_field_errors }}
@@ -59,6 +64,9 @@
       </fieldset>
       <button type="submit">เข้าแชต</button>
     </form>
+    {% endif %}
+    {% if operations_demo %}
+    <a class="back" href="{% url 'operations_login' %}">เข้าสู่ระบบสำหรับเจ้าหน้าที่</a><br>
     {% endif %}
     <a class="back" href="{% url 'landing' %}">กลับหน้าเลือกทางเข้า</a>
   </main>

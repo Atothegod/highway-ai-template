@@ -146,7 +146,7 @@ def run_agent(*, case, history: str, message: str) -> AgentResult:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    lm = dspy.LM(os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash"), api_key=api_key)
+    lm = dspy.LM(os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash"), api_key=api_key, temperature=0.7)
     with dspy.context(lm=lm):
         raw = dspy.Predict(BEMIncidentSignature)(
             ticket_id=case.ticket_id, case_status=case.status, current_case=_case_text(case),
