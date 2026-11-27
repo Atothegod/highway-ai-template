@@ -1,0 +1,27 @@
+.inbox { display: grid; grid-template-columns: minmax(235px, 32%) minmax(0, 1fr); gap: 14px; align-items: start; }
+.inbox > * { min-width: 0; background: #fff; border: 1px solid #dce6ed; border-radius: 14px; }
+.thread-list ul, #thread-log { list-style: none; padding: 0; margin: 0; }
+.thread-search, .thread-heading, .thread-reply, .thread-pages { padding: 14px; }
+.thread-search, .thread-actions, .thread-pages { display: flex; gap: 8px; align-items: center; }
+.thread-search input, .thread-reply textarea { width: 100%; min-width: 0; padding: 8px; font: inherit; border: 1px solid #aab9c6; border-radius: 8px; }
+.thread-list a { color: inherit; text-decoration: none; }
+.thread-list li a { display: grid; gap: 3px; padding: 12px 14px; border-top: 1px solid #e5edf2; overflow-wrap: anywhere; }
+.thread-list a[aria-current], .thread-list li a:hover { background: #e7f3f8; }
+.thread-list small, .thread-heading p, .thread-message header { color: #506578; }
+.thread-heading h2, .thread-heading p { margin: 0; }
+.thread-heading, .thread-reply { border-bottom: 1px solid #dce6ed; }
+.thread-reply { border-top: 1px solid #dce6ed; }
+.thread-messages { max-height: min(54vh, 560px); min-height: 180px; padding: 14px; overflow: auto; background: #f5f8fa; }
+.thread-message { margin: 8px 0; padding: 9px 11px; border-radius: 10px; border: 1px solid #dce6ed; background: white; width: fit-content; max-width: 90%; }
+.thread-message.staff { margin-left: auto; background: #e0f2ee; }
+.thread-message.assistant { margin-left: auto; background: #e7f1fe; }
+.thread-message p { margin: 3px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thread-message header { font-size: .8rem; }
+.thread-feedback, .thread-empty, .thread-placeholder { padding: 12px 14px; margin: 0; }
+.thread-feedback:empty { display: none; }
+.thread-actions { justify-content: space-between; margin-top: 8px; flex-wrap: wrap; }
+.thread-pages { justify-content: space-between; }
+@media (max-width: 700px) {
+  .inbox { grid-template-columns: 1fr; }
+  .thread-list ul { max-height: 220px; overflow: auto; }
+}

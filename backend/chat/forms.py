@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 
 from .models import IncidentReport
 from .routing import CATEGORY_CHOICES
@@ -16,6 +17,13 @@ class ChatLoginForm(forms.Form):
         label="ฉันยินยอมให้ BEM ใช้ชื่อผู้ใช้และข้อมูลที่ฉันส่งในแชตเพื่อรับแจ้งเหตุ ดำเนินการ และแจ้งความคืบหน้า",
         error_messages={"required": "กรุณาให้ความยินยอมก่อนเข้าแชต"},
     )
+
+
+class OperationsLoginForm(AuthenticationForm):
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if not user.is_staff:
+            raise forms.ValidationError("บัญชีนี้ไม่มีสิทธิ์เข้า Operations", code="operations_forbidden")
 
 
 class OperationsCaseForm(forms.ModelForm):

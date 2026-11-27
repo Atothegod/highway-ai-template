@@ -29,6 +29,7 @@
         <span>Operations</span>
       </a>
       <div class="topbar-meta">
+        <a href="{% url 'landing' %}">หน้าเลือกทางเข้า</a>
         <a href="{% url 'monitoring' %}">รายการเคสทั้งหมด <span aria-hidden="true">↗</span></a>
         <span class="avatar" title="{{ request.user.get_username }}" aria-label="{{ request.user.get_username }}">{{ request.user.get_username|slice:":1"|upper }}</span>
       </div>
@@ -49,11 +50,7 @@
       <div class="metric"><span class="metric-icon urgent"><svg class="icon"><use href="#i-alert"/></svg></span><div>เร่งด่วนที่ยังไม่ปิด<strong id="urgent">—</strong></div></div>
     </section>
     <div class="toolbar">
-      <nav class="view-nav" aria-label="มุมมองปฏิบัติการ">
-        <a href="{% url 'operations_dashboard' %}" {% if active_view == 'dashboard' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-stack"/></svg>Dashboard</a>
-        <a href="{% url 'operations_map' %}" {% if active_view == 'map' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-map"/></svg>Map</a>
-        <a href="{% url 'operations_board' %}" {% if active_view == 'board' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-board"/></svg>Board</a>
-      </nav>
+      {% include "chat/operations/navigation.html" %}
       {% if active_view != 'dashboard' %}
       <form id="filters" class="filters" role="search" aria-label="ค้นหาและกรองเคส">
         <label class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" name="q" aria-label="ค้นหาเคส" placeholder="ค้นหาเคสหรือสถานที่…"></label>

@@ -1,0 +1,6 @@
+      <nav class="view-nav" aria-label="มุมมองปฏิบัติการ">
+        <a href="{% url 'operations_dashboard' %}" {% if active_view == 'dashboard' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-stack"/></svg>Dashboard</a>
+        <a href="{% url 'operations_map' %}" {% if active_view == 'map' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-map"/></svg>Map</a>
+        <a href="{% url 'operations_board' %}" {% if active_view == 'board' %}aria-current="page"{% endif %}><svg class="icon"><use href="#i-board"/></svg>Board</a>
+        {% if perms.chat.view_chatmessage %}<a href="{% url 'operations_conversations' %}" {% if active_view == 'conversations' %}aria-current="page"{% endif %}>Conversations</a>{% endif %}
+      </nav>

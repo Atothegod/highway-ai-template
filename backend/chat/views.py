@@ -11,10 +11,14 @@ from urllib.request import Request, urlopen
 from django.db import transaction
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.admin.utils import quote
+from django.contrib.auth.views import LoginView
+from django.contrib.sessions.models import Session
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
@@ -22,9 +26,9 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .agent import AGENT_PROFILE, run_agent
-from .forms import ChatLoginForm, OperationsCaseForm, OperationsMoveForm
+from .forms import ChatLoginForm, OperationsCaseForm, OperationsLoginForm, OperationsMoveForm
 from .models import ChatMessage, IncidentReport, StatusEvent
-from .notifications import notify_case_status
+from .notifications import STATUS_MESSAGES, notify_case_status, status_chat_message
 from .routing import CATEGORY_CHOICES, POLICY, TEAM_CHOICES, TEAMS, apply_initial_routing
 
 MAX_HISTORY_MESSAGES = 30
@@ -85,6 +89,7 @@ def _case_data(case):
         "status_label": STATUS_LABELS[case.status],
         "flow_state": case.flow_state,
         "flow_label": FLOW_LABELS[case.flow_state],
+        "human_mode": case.human_mode,
         "category_level_1": case.category_level_1,
         "category_level_2": case.category_level_2,
         "title": case.title,
@@ -112,8 +117,27 @@ def _event_data(event):
         "status": event.status,
         "status_label": STATUS_LABELS[event.status],
         "message": event.message,
+        "chat_message": status_chat_message(event.incident_id, event.status)
+        if STATUS_MESSAGES.get(event.status) == event.message else None,
         "created_at": event.created_at.isoformat(),
     }
+
+
+@require_GET
+def landing_page(request):
+    return render(request, "chat/landing.html")
+
+
+class OperationsLoginView(LoginView):
+    template_name = "chat/login.html"
+    authentication_form = OperationsLoginForm
+    next_page = reverse_lazy("operations_dashboard")
+    extra_context = {"operations_login": True}
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_active and request.user.is_staff:
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
 
 
 @never_cache
@@ -158,18 +182,18 @@ def chat_page(request):
     })
 
 
-@staff_member_required
+@staff_member_required(login_url="operations_login")
 def monitoring_page(request):
     return render(request, "chat/monitoring.html")
 
 
-@staff_member_required
+@staff_member_required(login_url="operations_login")
 @require_GET
 def operations_dashboard(request):
     return render(request, "chat/operations/dashboard.html", {"active_view": "dashboard"})
 
 
-@staff_member_required
+@staff_member_required(login_url="operations_login")
 @require_GET
 def operations_map(request):
     return render(request, "chat/operations/map.html", {
@@ -180,7 +204,7 @@ def operations_map(request):
     })
 
 
-@staff_member_required
+@staff_member_required(login_url="operations_login")
 @require_GET
 def operations_board(request):
     return render(request, "chat/operations/board.html", {
@@ -191,7 +215,96 @@ def operations_board(request):
     })
 
 
-@staff_member_required
+def _conversation_permission(request, *, write=False):
+    if not request.user.has_perm("chat.view_chatmessage") or (
+        write and not request.user.has_perm("chat.add_chatmessage")
+    ):
+        raise PermissionDenied
+
+
+def _reporter_names(cases):
+    keys = {case.session_key for case in cases if not case.reporter_name}
+    sessions = Session.objects.filter(session_key__in=keys, expire_date__gt=timezone.now())
+    names = {session.pk: session.get_decoded().get(CHAT_IDENTITY, {}).get("username", "")
+             for session in sessions}
+    return {case.pk: case.reporter_name or names.get(case.session_key, "") for case in cases}
+
+
+@staff_member_required(login_url="operations_login")
+@never_cache
+@require_GET
+def operations_conversations(request):
+    _conversation_permission(request)
+    search = request.GET.get("q", "").strip()[:150]
+    cases = IncidentReport.objects.order_by("-updated_at", "ticket_id")
+    if search:
+        cases = cases.filter(
+            Q(ticket_id__icontains=search) | Q(reporter_name__icontains=search) | Q(title__icontains=search)
+        )
+    page = Paginator(cases, 40).get_page(request.GET.get("page"))
+    items = list(page.object_list)
+    selected = IncidentReport.objects.filter(pk=request.GET.get("ticket")).first()
+    names = _reporter_names([*items, *([selected] if selected else [])])
+    return render(request, "chat/operations/conversations.html", {
+        "active_view": "conversations",
+        "page": page,
+        "conversations": [(case, names[case.pk]) for case in items],
+        "selected": selected,
+        "reporter_name": names[selected.pk] if selected else "",
+        "search": search,
+        "can_reply": request.user.has_perm("chat.add_chatmessage"),
+    })
+
+
+@staff_member_required(login_url="operations_login")
+@never_cache
+@require_http_methods(["GET", "POST"])
+def operations_conversation(request, ticket_id):
+    _conversation_permission(request, write=request.method == "POST")
+    if request.method == "GET":
+        case = get_object_or_404(IncidentReport, pk=ticket_id)
+        try:
+            before = int(request.GET.get("before", 0))
+            after = int(request.GET.get("after", 0))
+        except ValueError:
+            return JsonResponse({"error": "หมายเลขข้อความไม่ถูกต้อง"}, status=400)
+        messages = case.messages.all()
+        if before > 0:
+            messages = messages.filter(pk__lt=before)
+        fields = ("id", "role", "author_name", "content", "created_at")
+        if after > 0:
+            rows = list(messages.filter(pk__gt=after).order_by("pk").values(*fields)[:100])
+            has_older = False
+        else:
+            latest = list(messages.order_by("-pk").values(*fields)[:101])
+            rows = list(reversed(latest[:100]))
+            has_older = len(latest) > 100
+        return JsonResponse({
+            "messages": rows,
+            "has_older": has_older,
+            "human_mode": case.human_mode,
+            "closed": case.status == IncidentReport.Status.CLOSED,
+        })
+
+    action = request.POST.get("action")
+    message = request.POST.get("message", "").strip()
+    if action not in {"reply", "take_over", "resume"} or (action == "reply" and not 1 <= len(message) <= 4000):
+        return JsonResponse({"error": "กรุณาระบุข้อความ 1–4,000 ตัวอักษร"}, status=400)
+    with transaction.atomic():
+        case = get_object_or_404(IncidentReport.objects.select_for_update(), pk=ticket_id)
+        if case.status == IncidentReport.Status.CLOSED:
+            return JsonResponse({"error": "เคสนี้ปิดแล้ว"}, status=409)
+        case.human_mode = action != "resume"
+        case.save(update_fields=["human_mode", "updated_at"])
+        if action == "reply":
+            ChatMessage.objects.create(
+                incident=case, role=ChatMessage.Role.STAFF,
+                author_name=request.user.get_username(), content=message,
+            )
+    return JsonResponse({"ok": True})
+
+
+@staff_member_required(login_url="operations_login")
 @require_POST
 @transaction.atomic
 def operations_case_update(request, ticket_id):
@@ -252,7 +365,7 @@ def _case_coordinates(case):
     return None
 
 
-@staff_member_required
+@staff_member_required(login_url="operations_login")
 @require_GET
 def monitoring_cases(request):
     cases = IncidentReport.objects.all()
@@ -312,10 +425,13 @@ def monitoring_cases(request):
 
 @require_GET
 @chat_session_required
+@transaction.atomic
 def chat_state(request):
     session_key = _ensure_session(request)
+    case = IncidentReport.objects.select_for_update().filter(
+        ticket_id=request.session.get("current_ticket_id"), session_key=session_key,
+    ).first()
     cursor = StatusEvent.objects.filter(incident__session_key=session_key).order_by("-id").values_list("id", flat=True).first() or 0
-    case = _current_case(request)
     if not case:
         return JsonResponse({
             "case": None,
@@ -323,11 +439,18 @@ def chat_state(request):
             "events": [],
             "cursor": cursor,
         })
+    status_messages = {status_chat_message(case.pk, status) for status in STATUS_MESSAGES}
+    messages = list(case.messages.values("id", "role", "content", "created_at"))
+    for message in messages:
+        message["is_status_update"] = (
+            message["role"] == ChatMessage.Role.ASSISTANT and message["content"] in status_messages
+        )
     return JsonResponse({
         "case": _case_data(case),
-        "messages": list(case.messages.values("role", "content", "created_at")),
+        "messages": messages,
         "events": [_event_data(event) for event in case.status_events.all()],
         "cursor": cursor,
+        "staff_cursor": max((message["id"] for message in messages if message["role"] == ChatMessage.Role.STAFF), default=0),
     })
 
 
@@ -374,6 +497,21 @@ def chat_pin(request):
     return JsonResponse({"case": _case_data(case)})
 
 
+def _closed_chat_reply(case, message):
+    reply = f"เคส {case.pk} ปิดแล้วครับ"
+    ChatMessage.objects.bulk_create([
+        ChatMessage(incident=case, role=ChatMessage.Role.USER, content=message),
+        ChatMessage(incident=case, role=ChatMessage.Role.ASSISTANT, content=reply),
+    ])
+    return JsonResponse({"reply": reply, "case": _case_data(case)})
+
+
+def _receive_human_message(case, message):
+    ChatMessage.objects.create(incident=case, role=ChatMessage.Role.USER, content=message)
+    case.save(update_fields=["updated_at"])
+    return JsonResponse({"reply": None, "case": _case_data(case)})
+
+
 @require_POST
 @chat_session_required
 def chat_api(request):
@@ -387,6 +525,13 @@ def chat_api(request):
         return JsonResponse({"error": "กรุณาระบุข้อความไม่เกิน 4,000 ตัวอักษร"}, status=400)
 
     case = _current_case(request)
+    if case and (case.status == IncidentReport.Status.CLOSED or case.human_mode):
+        with transaction.atomic():
+            case = IncidentReport.objects.select_for_update().get(pk=case.pk)
+            if case.status == IncidentReport.Status.CLOSED:
+                return _closed_chat_reply(case, message)
+            if case.human_mode:
+                return _receive_human_message(case, message)
     if case:
         previous = list(case.messages.order_by("-created_at")[:MAX_HISTORY_MESSAGES])
         previous.reverse()
@@ -395,7 +540,7 @@ def chat_api(request):
         history_items = request.session.get("pre_case_history", [])[-MAX_HISTORY_MESSAGES:]
     is_first_message = case is None
     history = "\n".join(
-        f"{'ผู้ใช้' if item['role'] == ChatMessage.Role.USER else 'BEM Care'}: {item['content']}"
+        f"{dict(ChatMessage.Role.choices).get(item['role'], 'BEM Care')}: {item['content']}"
         for item in history_items
     )
     try:
@@ -412,7 +557,14 @@ def chat_api(request):
         return JsonResponse({"reply": result.reply, "case": None})
 
     if case is None:
-        case = IncidentReport.objects.create(session_key=_ensure_session(request), received_at=received_at)
+        case = IncidentReport.objects.create(
+            session_key=_ensure_session(request), received_at=received_at,
+            reporter_name=_chat_identity(request)["username"],
+        )
+        ChatMessage.objects.bulk_create([
+            ChatMessage(incident=case, role=item["role"], content=item["content"])
+            for item in history_items
+        ])
         request.session["current_ticket_id"] = case.ticket_id
         request.session.pop("pre_case_history", None)
         StatusEvent.objects.create(
@@ -432,6 +584,10 @@ def chat_api(request):
                      "location", "occurred_at", "impact", "contact", "urgency")
     with transaction.atomic():
         case = IncidentReport.objects.select_for_update().get(pk=case.pk)
+        if case.status == IncidentReport.Status.CLOSED:
+            return _closed_chat_reply(case, message)
+        if case.human_mode:
+            return _receive_human_message(case, message)
         changed_fields = ["updated_at"]
         was_submitted = case.flow_state == IncidentReport.FlowState.SUBMITTED
         if not was_submitted and result.routing_category in POLICY:
@@ -476,15 +632,21 @@ def chat_api(request):
 @require_GET
 @chat_session_required
 def status_events(request):
-    case = _current_case(request)
     try:
         after = max(0, int(request.GET.get("after", 0)))
+        staff_after = max(0, int(request.GET.get("staff_after", 0)))
     except ValueError:
-        after = 0
-    events = StatusEvent.objects.filter(
-        incident__session_key=_ensure_session(request), id__gt=after
-    ).select_related("incident")
-    return JsonResponse({"case": _case_data(case), "events": [_event_data(event) for event in events]})
+        after = staff_after = 0
+    events = [
+        _event_data(event) for event in StatusEvent.objects.filter(
+            incident__session_key=_ensure_session(request), id__gt=after,
+        ).order_by("id")
+    ]
+    case = _current_case(request)
+    staff_messages = list(case.messages.filter(
+        role=ChatMessage.Role.STAFF, pk__gt=staff_after,
+    ).order_by("pk").values("id", "role", "content")) if case else []
+    return JsonResponse({"case": _case_data(case), "events": events, "staff_messages": staff_messages})
 
 
 @require_POST

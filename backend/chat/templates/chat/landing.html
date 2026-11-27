@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เลือกทางเข้า | BEM Care</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f1f5f8; color: #172536; font: 1rem/1.55 system-ui, "Noto Sans Thai", sans-serif; }
+    main { width: min(100% - 32px, 960px); margin: clamp(34px, 10vh, 100px) auto; }
+    .brand { display: flex; align-items: center; gap: 16px; color: #07365f; }
+    .brand img { width: 104px; height: 38px; object-fit: contain; }
+    .brand strong { border-inline-start: 1px solid #c9d6df; padding-inline-start: 16px; }
+    h1 { color: #07365f; margin: 28px 0 20px; font-size: clamp(1.75rem, 4vw, 2.4rem); }
+    nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .entry { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 22px; background: white; border: 1px solid #cad8e2; border-radius: 14px; color: #07365f; text-decoration: none; }
+    .entry:first-child { background: #07365f; border-color: #07365f; color: white; }
+    .entry strong { font-size: 1.16rem; }
+    .entry span { color: #506070; }
+    .entry:first-child span { color: #e2edf5; }
+    .entry:hover strong { text-decoration: underline; text-underline-offset: 4px; }
+    .entry:focus-visible { outline: 3px solid #087f99; outline-offset: 4px; }
+    @media (max-width: 670px) {
+      nav { grid-template-columns: 1fr; }
+      .entry { min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">
+      <img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM" width="104" height="38">
+      <strong>BEM Care</strong>
+    </div>
+    <h1>เลือกทางเข้าระบบ</h1>
+    <nav aria-label="ทางเข้าตามบทบาท">
+      <a class="entry" href="{% url 'chat_login' %}">
+        <strong>ผู้แจ้งเหตุ</strong>
+        <span>แจ้งปัญหาหรือติดตามเรื่องผ่านแชต BEM Care</span>
+      </a>
+      <a class="entry" href="{% url 'operations_login' %}">
+        <strong>เจ้าหน้าที่ Operations</strong>
+        <span>ดูรายการเคส แผนที่ และติดตามการดำเนินงาน</span>
+      </a>
+      <a class="entry" href="{% url 'admin:login' %}">
+        <strong>ผู้ดูแลระบบ</strong>
+        <span>จัดการบัญชีผู้ใช้ สิทธิ์ และข้อมูลใน Django Admin</span>
+      </a>
+    </nav>
+  </main>
+</body>
+</html>

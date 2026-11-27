@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>เข้าสู่แชต | BEM Care</title>
+  <title>{% if operations_login %}เข้าสู่ระบบ Operations{% else %}เข้าสู่แชต | BEM Care{% endif %}</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; background: linear-gradient(145deg, #eaf2f6, #f8fbfc); color: #172536; font: 1rem/1.55 system-ui, "Noto Sans Thai", sans-serif; }
@@ -14,7 +14,7 @@
     h1 { margin: 20px 0 4px; font-size: 1.6rem; color: #07365f; }
     p { margin: 0 0 22px; color: #506070; }
     label { font-weight: 650; }
-    input[type="text"] { width: 100%; margin-top: 6px; padding: 11px 13px; border: 1px solid #9eafbd; border-radius: 10px; font: inherit; }
+    input[type="text"], input[type="password"] { width: 100%; margin-top: 6px; padding: 11px 13px; border: 1px solid #9eafbd; border-radius: 10px; font: inherit; }
     fieldset { margin: 20px 0; border: 1px solid #dce6ed; border-radius: 10px; padding: 12px; }
     legend { color: #07365f; font-weight: 700; padding: 0 5px; }
     .consent { display: flex; align-items: flex-start; gap: 10px; font-size: .94rem; }
@@ -22,12 +22,26 @@
     input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 3px 0 0; accent-color: #07365f; }
     .errorlist { margin: 6px 0 0; padding-inline-start: 20px; color: #a02623; }
     button { width: 100%; border: 0; border-radius: 10px; padding: 12px; background: #07365f; color: #fff; font: inherit; font-weight: 750; cursor: pointer; }
+    .field { margin-bottom: 16px; }
+    .back { display: inline-block; margin-top: 18px; color: #07365f; }
     :focus-visible { outline: 3px solid #087f99; outline-offset: 3px; }
   </style>
 </head>
 <body>
   <main>
     <div class="brand"><img src="{% static 'chat/bem-care-agent.png' %}" alt=""><strong>BEM Care</strong></div>
+    {% if operations_login %}
+      <h1>เข้าสู่ระบบ Operations</h1>
+      <p>ใช้บัญชีเจ้าหน้าที่เพื่อเข้าดูและจัดการเคส</p>
+      <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="field">{{ form.username.label_tag }}{{ form.username }}{{ form.username.errors }}</div>
+        <div class="field">{{ form.password.label_tag }}{{ form.password }}{{ form.password.errors }}</div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit">เข้า Operations</button>
+      </form>
+    {% else %}
     <h1>เข้าสู่แชตแจ้งเหตุ</h1>
     <p>กรอกชื่อผู้ใช้และให้ความยินยอมเพื่อเริ่มสนทนา</p>
     <form method="post" action="{% url 'chat_login' %}">
@@ -45,6 +59,8 @@
       </fieldset>
       <button type="submit">เข้าแชต</button>
     </form>
+    {% endif %}
+    <a class="back" href="{% url 'landing' %}">กลับหน้าเลือกทางเข้า</a>
   </main>
 </body>
 </html>

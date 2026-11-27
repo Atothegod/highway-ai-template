@@ -13,6 +13,7 @@
     .secure + .logout-form{margin-left:0}
     .logout-form button{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--navy);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
     @media(max-width:850px){.topbar{height:66px}.secure{display:none}.secure + .logout-form{margin-left:auto}.layout{height:calc(100vh - 66px);min-height:0;padding:0;display:block}.side{display:none}.chat{height:100%;border:0;border-radius:0}.bubble{max-width:88%}.flow{display:none}}
+    .row.staff{flex-direction:column;align-items:flex-start;gap:3px}.staff-label{color:var(--navy);font-size:.8rem}
     #pin-card{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);white-space:normal}
     #pin-card p{margin:4px 0 8px}.pin-bubble:has(#pin-card){width:min(100%,440px)}
     #report-map{height:clamp(155px,28vh,245px);border-radius:10px;margin:8px 0}
@@ -88,11 +89,11 @@ async function chatFetch(url,options){
   }
   return response;
 }
-function add(role,text){const row=document.createElement('div');row.className=`row ${role}`;if(role==='assistant'){const icon=document.createElement('div');icon.className='bot-dot';const avatar=document.createElement('img');avatar.src=agentAvatar;avatar.alt='BEM Care';icon.appendChild(avatar);row.appendChild(icon)}const bubble=document.createElement('div');bubble.className='bubble';bubble.textContent=text;row.appendChild(bubble);box.appendChild(row);box.scrollTop=box.scrollHeight}
+function add(role,text,isStatusUpdate=false){const row=document.createElement('div');row.className=`row ${role}`;if(isStatusUpdate)row.dataset.statusUpdate="true";if(role==='staff'){const label=document.createElement('strong');label.textContent='เจ้าหน้าที่';label.className='staff-label';row.appendChild(label)}if(role==='assistant'){const icon=document.createElement('div');icon.className='bot-dot';const avatar=document.createElement('img');avatar.src=agentAvatar;avatar.alt='BEM Care';icon.appendChild(avatar);row.appendChild(icon)}const bubble=document.createElement('div');bubble.className='bubble';bubble.textContent=text;row.appendChild(bubble);box.appendChild(row);box.scrollTop=box.scrollHeight}
 let pinCase=null;
 const pinCard=document.querySelector('#pin-card');
 function resetView(){renderPinCase(null);box.innerHTML='';add('assistant',greeting);ticket.textContent='เริ่มสนทนาเพื่อเปิดเคส';ticket.className='empty';statusEl.textContent='ยังไม่เปิดเคส';statusEl.className='pill';taxonomy.textContent='ระบบจะจำแนกประเภทจากรายละเอียดเหตุ';taxonomy.className='taxonomy empty';timeline.innerHTML='<span class="empty">ยังไม่มีการอัปเดต</span>';flow.textContent='รอรับแจ้ง'}
-function renderPinCase(item){
+function renderPinCase(item,attach=true){
   const previous=pinCase;
   pinCase=item;
   const show=item&&item.status!=='CLOSED'&&(item.location||item.pin||item.flow_state==='CONFIRMING');
@@ -105,10 +106,11 @@ function renderPinCase(item){
   const button=document.querySelector('#pin-open');
   button.textContent=item.pin?'แก้ไขหมุด':'เลือกบนแผนที่';
   document.querySelector('#pin-location').textContent=[item.location,item.pin?'บันทึกหมุดแล้ว':''].filter(Boolean).join(' · ');
-  if(pinCard.hidden||previous?.location!==item.location||previous?.ticket_id!==item.ticket_id){
+  if(attach&&(pinCard.hidden||previous?.location!==item.location||previous?.ticket_id!==item.ticket_id)){
     document.querySelector('#pin-cancel').click();
-    const bubbles=box.querySelectorAll('.assistant .bubble');
+    const bubbles=box.querySelectorAll('.assistant:not([data-status-update]) .bubble');
     const bubble=bubbles[bubbles.length-1];
+    if(!bubble)return;
     pinCard.parentElement.classList.remove('pin-bubble');
     bubble.append(pinCard);
     bubble.classList.add('pin-bubble');
@@ -116,15 +118,40 @@ function renderPinCase(item){
     box.scrollTop=box.scrollHeight;
   }
 }
-function renderCase(item){if(!item)return;renderPinCase(item);ticket.textContent=item.ticket_id;ticket.className='ticket';statusEl.textContent=item.status_label;statusEl.className=`pill ${item.status}`;flow.textContent=item.flow_label;if(item.category_level_1||item.category_level_2){taxonomy.className='taxonomy';taxonomy.innerHTML='';const l1=document.createElement('b');l1.textContent=item.category_level_1||'—';const l2=document.createElement('span');l2.textContent=item.category_level_2||'กำลังจำแนกกลุ่ม';taxonomy.append(l1,l2)}}
+function renderCase(item,attachPin=true){
+  if(!item)return;
+  if(pinCase?.ticket_id===item.ticket_id&&Date.parse(pinCase.updated_at)>Date.parse(item.updated_at))return;
+  renderPinCase(item,attachPin);ticket.textContent=item.ticket_id;ticket.className='ticket';statusEl.textContent=item.status_label;statusEl.className=`pill ${item.status}`;flow.textContent=item.human_mode&&item.status!=='CLOSED'?'เจ้าหน้าที่กำลังดูแล':item.flow_label;if(item.category_level_1||item.category_level_2){taxonomy.className='taxonomy';taxonomy.innerHTML='';const l1=document.createElement('b');l1.textContent=item.category_level_1||'—';const l2=document.createElement('span');l2.textContent=item.category_level_2||'กำลังจำแนกกลุ่ม';taxonomy.append(l1,l2)}}
 function appendEvent(event){if(timeline.querySelector('.empty'))timeline.innerHTML='';const el=document.createElement('div');el.className='event';const title=document.createElement('b');title.textContent=`${event.status_label} · ${event.ticket_id}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);timeline.appendChild(el);lastEventId=Math.max(lastEventId,event.id)}
 function notify(event){const el=document.createElement('div');el.className='toast';const title=document.createElement('b');title.textContent=`อัปเดต ${event.ticket_id}: ${event.status_label}`;const detail=document.createElement('span');detail.textContent=event.message;el.append(title,detail);document.querySelector('#toasts').appendChild(el);setTimeout(()=>el.remove(),6500)}
-async function bootstrap(){resetView();try{const response=await chatFetch('/api/chat/state/');const data=await response.json();lastEventId=data.cursor||0;if(data.messages.length){box.innerHTML='';data.messages.forEach(item=>add(item.role,item.content))}if(!data.case)return;renderCase(data.case);data.events.forEach(event=>{const cursor=lastEventId;appendEvent(event);lastEventId=Math.max(cursor,lastEventId)})}catch(error){add('assistant','ไม่สามารถโหลดข้อมูลการสนทนาได้ กรุณาลองใหม่อีกครั้ง')}}
-form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;add('user',message);input.value='';send.disabled=true;try{const response=await chatFetch('/api/chat/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({message})});const data=await response.json();if(!response.ok)throw new Error(data.error||'เกิดข้อผิดพลาด');add('assistant',data.reply);
-if(data.case&&!data.case.pin&&data.case.flow_state==='CONFIRMING'&&document.querySelector('#pin-picker').hidden) pinCard.hidden=true;
-renderCase(data.case)}catch(error){add('assistant',error.message)}finally{send.disabled=false;input.focus()}});
-document.querySelector('#reset').addEventListener('click',async()=>{if(ticket.className==='ticket'&&!confirm('เริ่มแจ้งเหตุใหม่? เคสปัจจุบันยังติดตามต่อได้ด้วย Ticket ID เดิม'))return;const response=await chatFetch('/api/chat/reset/',{method:'POST',headers:{'X-CSRFToken':csrf()}}).catch(()=>null);if(!response?.ok)return;const data=await response.json();lastEventId=data.cursor||lastEventId;resetView();input.focus()});
-async function poll(){try{const response=await chatFetch(`/api/ticket/status/?after=${lastEventId}`);const data=await response.json();renderCase(data.case);data.events.forEach(event=>{appendEvent(event);notify(event)})}catch(error){/* retry on next interval */}}
-bootstrap().then(()=>setInterval(poll,7000));
+let staffCursor=0;
+async function bootstrap(){resetView();try{const response=await chatFetch('/api/chat/state/');const data=await response.json();lastEventId=data.cursor||0;staffCursor=data.staff_cursor||0;if(data.messages.length){box.innerHTML='';data.messages.forEach(item=>add(item.role,item.content,item.is_status_update))}if(!data.case)return;renderCase(data.case);data.events.forEach(event=>{const cursor=lastEventId;appendEvent(event);lastEventId=Math.max(cursor,lastEventId)})}catch(error){add('assistant','ไม่สามารถโหลดข้อมูลการสนทนาได้ กรุณาลองใหม่อีกครั้ง')}}
+form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;add('user',message);input.value='';send.disabled=true;try{const response=await chatFetch('/api/chat/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({message})});const data=await response.json();if(!response.ok)throw new Error(data.error||'เกิดข้อผิดพลาด');if(data.reply)add('assistant',data.reply);
+if(data.reply&&data.case&&!data.case.pin&&data.case.flow_state==='CONFIRMING'&&document.querySelector('#pin-picker').hidden) pinCard.hidden=true;
+renderCase(data.case,Boolean(data.reply))}catch(error){add('assistant',error.message)}finally{send.disabled=false;input.focus()}});
+document.querySelector('#reset').addEventListener('click',async()=>{if(ticket.className==='ticket'&&!confirm('เริ่มแจ้งเหตุใหม่? เคสปัจจุบันยังติดตามต่อได้ด้วย Ticket ID เดิม'))return;const response=await chatFetch('/api/chat/reset/',{method:'POST',headers:{'X-CSRFToken':csrf()}}).catch(()=>null);if(!response?.ok)return;const data=await response.json();lastEventId=Math.max(data.cursor||0,lastEventId);chatGeneration++;staffCursor=0;resetView();input.focus()});
+let chatGeneration=0;
+async function poll(){
+  const generation=chatGeneration;
+  try{
+    const response=await chatFetch(`/api/ticket/status/?after=${lastEventId}&staff_after=${staffCursor}`);
+    const data=await response.json();
+    if(generation!==chatGeneration)return;
+    renderCase(data.case,false);
+    for(const event of data.events){
+      if(event.id<=lastEventId)continue;
+      appendEvent(event);
+      if(event.chat_message&&event.ticket_id===pinCase?.ticket_id) add('assistant',event.chat_message,true);
+      notify(event);
+    }
+    for(const message of data.staff_messages||[]){
+      if(message.id<=staffCursor)continue;
+      staffCursor=message.id;
+      add('staff',message.content);
+    }
+  }catch(error){/* retry on next interval */}
+  finally{setTimeout(poll,7000)}
+}
+bootstrap().then(()=>setTimeout(poll,7000));
 </script>
 </body></html>

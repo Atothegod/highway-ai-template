@@ -7,9 +7,83 @@ from .agent import AgentResult
 from .models import IncidentReport, StatusEvent
 
 
+class RoleLandingTests(TestCase):
+    def test_landing_links_to_each_login(self):
+        response = self.client.get("/")
+        for path in ("/login/", "/operations/login/", "/admin/login/"):
+            self.assertContains(response, f'href="{path}"')
+
+    def test_operations_requires_staff_and_returns_to_requested_page(self):
+        login_path = "/operations/login/?next=/operations/board/"
+        self.assertRedirects(self.client.get("/operations/board/"), login_path)
+        users = get_user_model().objects
+        users.create_user(username="visitor", password="test-pass")
+        users.create_user(username="operator", password="test-pass", is_staff=True)
+        denied = self.client.post(login_path, {"username": "visitor", "password": "test-pass", "next": "/operations/board/"})
+        self.assertContains(denied, "บัญชีนี้ไม่มีสิทธิ์เข้า Operations")
+        allowed = self.client.post(login_path, {"username": "operator", "password": "test-pass", "next": "/operations/board/"})
+        self.assertRedirects(allowed, "/operations/board/")
+
+
+class ConversationsTests(TestCase):
+    @patch("chat.views.run_agent")
+    def test_staff_reply_is_delivered_and_pauses_agent_until_resumed(self, mocked_agent):
+        reporter = self.client_class()
+        reporter.post("/login/", {"username": "ผู้แจ้งทดสอบ", "pdpa_consent": "on"})
+        mocked_agent.return_value = AgentResult(
+            reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True,
+        )
+        response = reporter.post("/api/chat/", {"message": "พบเหตุทดสอบ"}, content_type="application/json")
+        ticket = response.json()["case"]["ticket_id"]
+        self.assertEqual(IncidentReport.objects.get(pk=ticket).reporter_name, "ผู้แจ้งทดสอบ")
+
+        endpoint = f"/api/operations/conversations/{ticket}/"
+        editor = get_user_model().objects.create_user(username="operator", is_staff=True, is_superuser=True)
+        self.client.force_login(editor)
+        page = self.client.get("/operations/conversations/", {"ticket": ticket})
+        self.assertContains(page, "ผู้แจ้งทดสอบ")
+        self.assertContains(page, "BEM Care Web")
+        self.assertEqual(self.client.get(endpoint).json()["messages"][0]["content"], "พบเหตุทดสอบ")
+
+        self.assertEqual(self.client.post(endpoint, {"action": "reply", "message": "กำลังตรวจสอบ"}).status_code, 200)
+        poll = reporter.get("/api/ticket/status/", {"staff_after": 0}).json()
+        self.assertTrue(poll["case"]["human_mode"])
+        staff_message, = poll["staff_messages"]
+        self.assertEqual(staff_message["content"], "กำลังตรวจสอบ")
+        self.assertEqual(reporter.get("/api/chat/state/").json()["staff_cursor"], staff_message["id"])
+        self.assertEqual(reporter.get("/api/ticket/status/", {"staff_after": staff_message["id"]}).json()["staff_messages"], [])
+        self.assertEqual(self.client.get(endpoint).json()["messages"][-1]["author_name"], "operator")
+
+        mocked_agent.reset_mock()
+        response = reporter.post("/api/chat/", {"message": "ขอบคุณ"}, content_type="application/json")
+        self.assertIsNone(response.json()["reply"])
+        mocked_agent.assert_not_called()
+        self.assertEqual(self.client.get(endpoint, {"after": staff_message["id"]}).json()["messages"][0]["content"], "ขอบคุณ")
+
+        self.assertEqual(self.client.post(endpoint, {"action": "resume"}).status_code, 200)
+        response = reporter.post("/api/chat/", {"message": "ขอแจ้งข้อมูลเพิ่ม"}, content_type="application/json")
+        self.assertFalse(response.json()["case"]["human_mode"])
+        mocked_agent.assert_called_once()
+
+    def test_transcript_permissions_and_closed_case_guard(self):
+        from django.contrib.auth.models import Permission
+
+        case = IncidentReport.objects.create(session_key="reporter", status=IncidentReport.Status.CLOSED)
+        endpoint = f"/api/operations/conversations/{case.pk}/"
+        viewer = get_user_model().objects.create_user(username="viewer", is_staff=True)
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(endpoint).status_code, 403)
+        viewer.user_permissions.add(Permission.objects.get(content_type__app_label="chat", codename="view_chatmessage"))
+        self.assertEqual(self.client.get(endpoint).status_code, 200)
+        self.assertEqual(self.client.post(endpoint, {"action": "reply", "message": "สวัสดี"}).status_code, 403)
+        viewer.user_permissions.add(Permission.objects.get(content_type__app_label="chat", codename="add_chatmessage"))
+        self.assertEqual(self.client.post(endpoint, {"action": "reply", "message": "สวัสดี"}).status_code, 409)
+        self.assertFalse(case.messages.exists())
+
+
 class ChatLoginTests(TestCase):
     def test_chat_requires_username_and_consent(self):
-        self.assertRedirects(self.client.get("/"), "/login/")
+        self.assertRedirects(self.client.get("/chat/"), "/login/")
         for username, consent in (("reporter", ""), ("   ", "on")):
             with self.subTest(username=username, consent=consent):
                 response = self.client.post("/login/", {"username": username, "pdpa_consent": consent})
@@ -33,8 +107,8 @@ class ChatLoginTests(TestCase):
         session.save()
 
         response = self.client.post("/login/", {"username": "  reporter  ", "pdpa_consent": "on"})
-        self.assertRedirects(response, "/")
-        self.assertContains(self.client.get("/"), "reporter")
+        self.assertRedirects(response, "/chat/")
+        self.assertContains(self.client.get("/chat/"), "reporter")
         self.assertEqual(self.client.session.session_key, session.session_key)
         identity = self.client.session["chat_identity"]
         self.assertEqual(identity["username"], "reporter")
@@ -227,7 +301,7 @@ class MonitoringTests(TestCase):
     def test_monitoring_requires_staff_login(self):
         response = self.client.get("/monitor/")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/admin/login/", response.url)
+        self.assertIn("/operations/login/", response.url)
 
     def test_monitoring_api_returns_stats_and_filters(self):
         IncidentReport.objects.create(session_key="one", title="ลิฟต์ขัดข้อง", urgency="HIGH")
@@ -260,6 +334,33 @@ class OperationsBoardTests(TestCase):
             "latitude": "13.756300", "longitude": "100.501800",
             "version": self.case.updated_at.isoformat(),
         }
+
+    @patch("chat.views.run_agent")
+    def test_status_changes_produce_live_and_persisted_chat_updates(self, mocked_agent):
+        self.client.force_login(self.editor)
+        cursor = self.reporter.get("/api/chat/state/").json()["cursor"]
+        for status, expected in (
+            ("IN_PROGRESS", "เจ้าหน้าที่กำลังดำเนินการตรวจสอบและแก้ไข"),
+            ("CLOSED", "ดำเนินการเสร็จสิ้นและปิดเคสแล้ว"),
+        ):
+            version = self.case.updated_at.isoformat()
+            response = self.client.post(self.endpoint, {"action": "move", "status": status, "version": version})
+            self.assertEqual(response.status_code, 200)
+            self.case.refresh_from_db()
+            poll = self.reporter.get("/api/ticket/status/", {"after": cursor}).json()
+            self.assertEqual(poll["case"]["status"], status)
+            event, = poll["events"]
+            self.assertEqual(event["chat_message"], f"อัปเดต {self.case.pk} · {expected}")
+            cursor = event["id"]
+        state = self.reporter.get("/api/chat/state/").json()
+        self.assertEqual(state["cursor"], cursor)
+        self.assertEqual(len(state["messages"]), 2)
+        self.assertTrue(all(m["is_status_update"] for m in state["messages"]))
+        followup = self.reporter.post("/api/chat/", {"message": "สถานะเป็นยังไง"},
+                                      content_type="application/json").json()
+        self.assertEqual(followup["case"]["status"], "CLOSED")
+        self.assertIn("ปิดแล้ว", followup["reply"])
+        mocked_agent.assert_not_called()
 
     def test_close_case_and_save_coordinates_notifies_only_reporter(self):
         self.client.force_login(self.editor)

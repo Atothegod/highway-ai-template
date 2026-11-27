@@ -24,6 +24,8 @@ class IncidentReport(models.Model):
 
     ticket_id = models.CharField(max_length=32, primary_key=True, default=make_ticket_id, editable=False)
     session_key = models.CharField(max_length=40, db_index=True)
+    reporter_name = models.CharField("ชื่อผู้แจ้ง", max_length=150, blank=True)
+    human_mode = models.BooleanField("เจ้าหน้าที่รับช่วง", default=False)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     flow_state = models.CharField(max_length=20, choices=FlowState.choices, default=FlowState.COLLECTING)
     category_level_1 = models.CharField(max_length=100, blank=True)
@@ -78,9 +80,11 @@ class ChatMessage(models.Model):
     class Role(models.TextChoices):
         USER = "user", "ผู้ใช้"
         ASSISTANT = "assistant", "BEM Care"
+        STAFF = "staff", "เจ้าหน้าที่"
 
     incident = models.ForeignKey(IncidentReport, on_delete=models.CASCADE, related_name="messages")
     role = models.CharField(max_length=12, choices=Role.choices)
+    author_name = models.CharField("ชื่อบัญชีเจ้าหน้าที่", max_length=150, blank=True)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

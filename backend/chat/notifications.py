@@ -8,11 +8,15 @@ STATUS_MESSAGES = {
 }
 
 
+def status_chat_message(ticket_id, status):
+    return f"อัปเดต {ticket_id} · {STATUS_MESSAGES[status]}"
+
+
 def notify_case_status(incident):
     message = STATUS_MESSAGES[incident.status]
     StatusEvent.objects.create(incident=incident, status=incident.status, message=message)
     ChatMessage.objects.create(
         incident=incident,
         role=ChatMessage.Role.ASSISTANT,
-        content=f"อัปเดต {incident.ticket_id} · {message}",
+        content=status_chat_message(incident.ticket_id, incident.status),
     )

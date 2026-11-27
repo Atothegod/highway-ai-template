@@ -1,0 +1,81 @@
+{% load static %}
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversations · BEM Operations</title>
+  <link rel="stylesheet" href="{% static 'chat/operations.css' %}">
+  <link rel="stylesheet" href="{% static 'chat/conversations.css' %}">
+  <script defer src="{% static 'chat/conversations.js' %}"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="wordmark" href="{% url 'operations_dashboard' %}">
+        <img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM" width="104" height="38">
+        <span>Operations</span>
+      </a>
+      <a href="{% url 'landing' %}">หน้าเลือกทางเข้า</a>
+    </div>
+  </header>
+  <main class="workspace">
+    <h1>Conversations</h1>
+    <div class="toolbar">{% include "chat/operations/navigation.html" %}</div>
+    <div class="inbox">
+      <section class="thread-list" aria-label="รายการบทสนทนา">
+        <form class="thread-search" role="search" method="get">
+          <input type="search" name="q" aria-label="ค้นหาบทสนทนา" placeholder="ค้นชื่อผู้แจ้ง เลขเคส หรือหัวข้อ" value="{{ search }}">
+          <button class="button" type="submit">ค้นหา</button>
+        </form>
+        <ul>
+          {% for case, name in conversations %}
+            <li><a href="?ticket={{ case.pk|urlencode }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}&amp;page={{ page.number }}" {% if selected.pk == case.pk %}aria-current="true"{% endif %}>
+              <strong>{{ name|default:"ไม่ทราบชื่อผู้แจ้ง" }}</strong>
+              <span>{{ case.title|default:case.pk }}</span>
+              <small>BEM Care Web · {{ case.get_status_display }}{% if case.human_mode %} · เจ้าหน้าที่ดูแล{% endif %}</small>
+            </a></li>
+          {% empty %}
+            <li class="thread-empty">ไม่พบบทสนทนา</li>
+          {% endfor %}
+        </ul>
+        {% if page.has_other_pages %}
+          <nav class="thread-pages" aria-label="หน้ารายการบทสนทนา">
+            {% if page.has_previous %}<a href="?q={{ search|urlencode }}&amp;page={{ page.previous_page_number }}">ก่อนหน้า</a>{% endif %}
+            <span>{{ page.number }} / {{ page.paginator.num_pages }}</span>
+            {% if page.has_next %}<a href="?q={{ search|urlencode }}&amp;page={{ page.next_page_number }}">ถัดไป</a>{% endif %}
+          </nav>
+        {% endif %}
+      </section>
+      {% if selected %}
+        <section class="thread" data-url="{% url 'operations_conversation' selected.pk %}" data-reporter="{{ reporter_name }}">
+          <header class="thread-heading">
+            <div>
+              <h2>{{ reporter_name|default:"ไม่ทราบชื่อผู้แจ้ง" }}</h2>
+              <p>{{ selected.pk }} · BEM Care Web · <span id="thread-mode"></span></p>
+            </div>
+          </header>
+          <div id="thread-messages" class="thread-messages" aria-label="ข้อความในบทสนทนา">
+            <button id="thread-older" class="button" type="button" hidden>ข้อความก่อนหน้า</button>
+            <ol id="thread-log" aria-live="polite"></ol>
+          </div>
+          <p id="thread-feedback" class="thread-feedback" role="status"></p>
+          {% if can_reply %}
+            <form id="thread-reply" class="thread-reply" hidden>
+              {% csrf_token %}
+              <label for="reply-message">ตอบผู้แจ้ง</label>
+              <textarea id="reply-message" name="message" rows="3" maxlength="4000" required></textarea>
+              <div class="thread-actions">
+                <button id="thread-mode-change" class="button" type="button"></button>
+                <button class="button primary" type="submit">ส่งข้อความ</button>
+              </div>
+            </form>
+          {% endif %}
+        </section>
+      {% else %}
+        <div class="thread thread-placeholder">เลือกบทสนทนาเพื่อดูข้อความ</div>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>
