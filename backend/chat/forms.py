@@ -1,6 +1,8 @@
 from django import forms
 
 from .models import IncidentReport
+from .routing import CATEGORY_CHOICES
+
 
 
 class ChatLoginForm(forms.Form):
@@ -17,6 +19,13 @@ class ChatLoginForm(forms.Form):
 
 
 class OperationsCaseForm(forms.ModelForm):
+    routing_category = forms.ChoiceField(required=False, choices=[("", "รอตรวจหมวด"), *CATEGORY_CHOICES])
+
+    def clean(self):
+        data = super().clean()
+        if data.get("grc_handoff_status") == "ACCEPTED" and not data.get("grc_case_id"):
+            self.add_error("grc_case_id", "กรุณาระบุเลขเคส GRC เมื่อ GRC รับเรื่องแล้ว")
+        return data
     urgency = forms.ChoiceField(
         required=False,
         choices=[("", "ไม่ระบุ"), ("HIGH", "สูง"), ("MEDIUM", "ปานกลาง"), ("LOW", "ต่ำ")],
@@ -24,7 +33,10 @@ class OperationsCaseForm(forms.ModelForm):
 
     class Meta:
         model = IncidentReport
-        fields = ("status", "urgency", "location", "latitude", "longitude")
+        fields = (
+            "status", "urgency", "location", "latitude", "longitude",
+            "routing_category", "assigned_team", "resolution_summary", "grc_case_id", "grc_handoff_status",
+        )
 
 
 class OperationsMoveForm(forms.ModelForm):

@@ -4,6 +4,8 @@ from typing import Literal
 import dspy
 from pydantic import BaseModel
 
+from .routing import CATALOG, POLICY
+
 
 AGENT_PROFILE = {
     "name": "BEM Care",
@@ -45,6 +47,7 @@ class AgentResult(BaseModel):
     location: str = ""
     occurred_at: str = ""
     occurred_at_normalized: str = ""
+    routing_category: str = ""
     impact: str = ""
     contact: str = ""
     urgency: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = "MEDIUM"
@@ -89,6 +92,7 @@ class BEMIncidentSignature(dspy.Signature):
     current_case: str = dspy.InputField(desc="ข้อมูลเคสที่เก็บไว้แล้ว")
     missing_fields: str = dspy.InputField(desc="ข้อมูลสำคัญที่ยังขาด ให้ถามจากรายการนี้เท่านั้น")
     taxonomy: str = dspy.InputField(desc="taxonomy ระดับ 1 และระดับ 2 ที่อนุญาต")
+    routing_catalog: str = dspy.InputField(desc="รหัสหมวดละเอียดสำหรับจับคู่ทีมและ SLA")
     chat_history: str = dspy.InputField(desc="ประวัติสนทนาก่อนหน้า")
     user_message: str = dspy.InputField(desc="ข้อความล่าสุดจากผู้ใช้")
     reply: str = dspy.OutputField(desc="คำตอบภาษาไทยสุภาพ กระชับ และห้ามมี Ticket ID เพราะ backend จะเพิ่มให้")
@@ -101,6 +105,9 @@ class BEMIncidentSignature(dspy.Signature):
     service_area: str = dspy.OutputField(desc="Expressway, Rail, Corporate หรือ Unknown")
     location: str = dspy.OutputField(desc="สถานี ด่าน ทางพิเศษ กม. ช่องทาง หรือจุดเกิดเหตุ")
     occurred_at: str = dspy.OutputField(desc="วันเวลาที่เกิดเหตุตามที่ผู้ใช้แจ้ง เก็บข้อความต้นฉบับรวมถึงเวลาคร่าว ๆ")
+    routing_category: str = dspy.OutputField(
+        desc="รหัสเดียวจาก routing_catalog ที่ตรงกับข้อเท็จจริงของเหตุ ถ้าข้อมูลไม่พอหรือไม่มีหมวดตรงให้คืนค่าว่าง"
+    )
     occurred_at_normalized: str = dspy.OutputField(
         desc="ISO 8601 พร้อม offset เมื่อผู้แจ้งระบุวันปฏิทินและเวลาได้ชัดเจนเท่านั้น "
         "ใช้ +07:00 สำหรับเวลาท้องถิ่นไทย ถ้ารู้เพียงช่วงเวลาคร่าว ๆ หรือข้อมูลไม่ครบให้คืนค่าว่าง ห้ามเดา"
@@ -144,11 +151,14 @@ def run_agent(*, case, history: str, message: str) -> AgentResult:
         raw = dspy.Predict(BEMIncidentSignature)(
             ticket_id=case.ticket_id, case_status=case.status, current_case=_case_text(case),
             missing_fields=_missing_fields(case),
-            taxonomy=TAXONOMY_TEXT, chat_history=history or "ยังไม่มีประวัติการสนทนา",
+            taxonomy=TAXONOMY_TEXT, routing_catalog=CATALOG, chat_history=history or "ยังไม่มีประวัติการสนทนา",
             user_message=message,
         )
     data = {field: getattr(raw, field, "") for field in AgentResult.model_fields}
     result = AgentResult.model_validate(data)
+    result.routing_category = result.routing_category.strip().upper()
+    if result.routing_category not in POLICY:
+        result.routing_category = ""
     if result.category_level_2 in LEVEL_1_BY_LEVEL_2:
         result.category_level_1 = LEVEL_1_BY_LEVEL_2[result.category_level_2]
     elif result.category_level_1 not in TAXONOMY:

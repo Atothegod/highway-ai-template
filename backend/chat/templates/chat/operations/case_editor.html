@@ -21,6 +21,26 @@
               </select>
             </label>
             <label class="editor-wide">สถานที่ <input name="location" maxlength="300"></label>
+            <label class="editor-wide">หมวดสำหรับจับคู่ทีมและ SLA
+              <select name="routing_category">
+                <option value="">รอตรวจหมวด</option>
+                {% for code, label in routing_categories %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="editor-wide">ทีมรับผิดชอบ
+              <select name="assigned_team">
+                <option value="">ใช้ทีมตามหมวด</option>
+                {% for code, label in routing_teams %}<option value="{{ code }}">{{ code }} · {{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>เลขเคส GRC <input name="grc_case_id" maxlength="120"></label>
+            <label>สถานะส่งต่อ GRC
+              <select name="grc_handoff_status">
+                <option value="">ยังไม่ระบุ</option>
+                {% for code, label in handoff_choices %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="editor-wide">ผลการแก้ไข <textarea name="resolution_summary" rows="3"></textarea></label>
           </div>
           <p class="editor-hint">เมื่อเปลี่ยนสถานะ ระบบจะแจ้งผู้แจ้งผ่านแชต BEM Care</p>
           <div class="pin-heading">

@@ -51,6 +51,14 @@
       </button>`;
   }
 
+  const formatDate = (value) => value ? date.format(new Date(value)) : '';
+  function slaState(incident) {
+    if (!incident.sla_due_at) return 'รอจับคู่หมวด';
+    const due = Date.parse(incident.sla_due_at);
+    if (incident.resolved_at) return Date.parse(incident.resolved_at) <= due ? 'ทันกำหนด' : 'แก้ไขเสร็จเกินกำหนด';
+    return due < Date.now() ? 'เกินกำหนด · ยังไม่บันทึกผล' : 'อยู่ในกำหนด';
+  }
+
   function showCase(incident, openEditor = false) {
     if (editor) {
       editedCase = incident;
@@ -62,7 +70,17 @@
     byId('case-title').textContent = title(incident);
     const fields = [
       ['สถานที่', location(incident)],
-      ['เวลาที่เกิดเหตุ', incident.occurred_at],
+      ['เวลาที่เกิดเหตุ', formatDate(incident.occurred_at_normalized) || incident.occurred_at],
+      ['รับแจ้งครั้งแรก', formatDate(incident.received_at)],
+      ['ยืนยันส่งเรื่อง', formatDate(incident.submitted_at)],
+      ['รหัสหมวดที่จับคู่', [incident.routing_category, incident.routing_level].filter(Boolean).join(' · ')],
+      ['ทีมรับผิดชอบ', [incident.assigned_team, incident.assigned_team_label !== incident.assigned_team ? incident.assigned_team_label : ''].filter(Boolean).join(' · ') || 'รอมอบหมาย'],
+      ['เวลามอบหมาย', formatDate(incident.assigned_at)],
+      ['ครบกำหนด SLA', formatDate(incident.sla_due_at)],
+      ['สถานะ SLA', slaState(incident)],
+      ['แก้ไขเสร็จ', formatDate(incident.resolved_at)],
+      ['เลขเคส GRC', incident.grc_case_id],
+      ['สถานะส่งต่อ GRC', incident.grc_handoff_label],
       ['พื้นที่บริการ', incident.service_area],
       ['อัปเดตล่าสุด', date.format(new Date(incident.updated_at))],
       ['หมวดหมู่', [incident.category_level_1, incident.category_level_2].filter(Boolean).join(' / ')],
@@ -73,6 +91,7 @@
       <dl class="detail-fields">${fields.map(([label, value]) => `<div><dt>${label}</dt><dd>${escape(value || '—')}</dd></div>`).join('')}</dl>
       <section class="detail-section"><h3>รายละเอียดเหตุ</h3><p>${escape(incident.description || 'ยังไม่มีรายละเอียด')}</p></section>
       ${incident.impact ? `<section class="detail-section"><h3>ผลกระทบ</h3><p>${escape(incident.impact)}</p></section>` : ''}
+      ${incident.resolution_summary ? `<section class="detail-section"><h3>ผลการแก้ไข</h3><p>${escape(incident.resolution_summary)}</p></section>` : ''}
       ${incident.events.length ? `<section class="detail-section"><h3>ประวัติสถานะ</h3><ol class="detail-events">${incident.events.map((event) => `
         <li><time datetime="${escape(event.created_at)}">${date.format(new Date(event.created_at))}</time><br>
         <strong>${escape(event.status_label)}</strong> · ${escape(event.message)}</li>`).join('')}</ol></section>` : ''}
@@ -196,6 +215,17 @@
       fields.status.value = editedCase.status;
       fields.urgency.value = priority(editedCase) === 'UNKNOWN' ? '' : editedCase.urgency;
       fields.location.value = editedCase.location;
+      fields.routing_category.value = editedCase.routing_category || '';
+      fields.assigned_team.querySelector('[data-legacy-team]')?.remove();
+      if (editedCase.assigned_team && !Array.from(fields.assigned_team.options).some(option => option.value === editedCase.assigned_team)) {
+        const option = new Option(editedCase.assigned_team, editedCase.assigned_team);
+        option.dataset.legacyTeam = '';
+        fields.assigned_team.add(option);
+      }
+      fields.assigned_team.value = editedCase.assigned_team || '';
+      fields.resolution_summary.value = editedCase.resolution_summary || '';
+      fields.grc_case_id.value = editedCase.grc_case_id || '';
+      fields.grc_handoff_status.value = editedCase.grc_handoff_status || '';
       fields.latitude.value = initial ? initial[0].toFixed(6) : '';
       fields.longitude.value = initial ? initial[1].toFixed(6) : '';
       fields.version.value = editedCase.updated_at;

@@ -81,6 +81,31 @@ class IncidentFlowTests(TestCase):
         self.assertEqual(case.status_events.get().status, IncidentReport.Status.OPEN)
 
     @patch("chat.views.run_agent")
+    def test_confirmed_routing_uses_receipt_time_and_document_defaults(self, mocked_agent):
+        import datetime
+
+        mocked_agent.return_value = AgentResult(
+            reply="กรุณายืนยัน", flow_state="CONFIRMING", should_open_case=True,
+            routing_category="T01.02", location="13.75, 100.50",
+            occurred_at="ช่วงเช้า", occurred_at_normalized="",
+        )
+        self.client.post("/api/chat/", {"message": "ประตูกั้นชานชาลาขัดข้อง"}, content_type="application/json")
+        case = IncidentReport.objects.get()
+        self.assertIsNotNone(case.received_at)
+        self.assertIsNone(case.occurred_at_normalized)
+        self.assertEqual(case.assigned_team, "")
+        self.client.post(f"/api/chat/pin/?ticket_id={case.pk}", {"latitude": 13.75, "longitude": 100.50},
+                         content_type="application/json")
+        mocked_agent.return_value.flow_state = "SUBMITTED"
+        self.client.post("/api/chat/", {"message": "ยืนยัน"}, content_type="application/json")
+        case.refresh_from_db()
+        self.assertEqual(case.assigned_team, "RAIL-ME")
+        self.assertEqual(case.sla_due_at, case.received_at + datetime.timedelta(hours=168))
+        self.assertGreaterEqual(case.assigned_at, case.submitted_at)
+        self.assertEqual(case.grc_handoff_status, "PENDING")
+        self.assertEqual(case.grc_case_id, "")
+
+    @patch("chat.views.run_agent")
     def test_occurrence_keeps_original_and_clears_stale_normalization(self, mocked_agent):
         mocked_agent.return_value = AgentResult(
             reply="รับทราบครับ", flow_state="COLLECTING", should_open_case=True,

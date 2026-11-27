@@ -25,6 +25,7 @@ from .agent import AGENT_PROFILE, run_agent
 from .forms import ChatLoginForm, OperationsCaseForm, OperationsMoveForm
 from .models import ChatMessage, IncidentReport, StatusEvent
 from .notifications import notify_case_status
+from .routing import CATEGORY_CHOICES, POLICY, TEAM_CHOICES, TEAMS, apply_initial_routing
 
 MAX_HISTORY_MESSAGES = 30
 STATUS_LABELS = dict(IncidentReport.Status.choices)
@@ -171,13 +172,23 @@ def operations_dashboard(request):
 @staff_member_required
 @require_GET
 def operations_map(request):
-    return render(request, "chat/operations/map.html", {"active_view": "map"})
+    return render(request, "chat/operations/map.html", {
+        "active_view": "map",
+        "routing_categories": CATEGORY_CHOICES,
+        "routing_teams": TEAM_CHOICES,
+        "handoff_choices": IncidentReport._meta.get_field("grc_handoff_status").choices,
+    })
 
 
 @staff_member_required
 @require_GET
 def operations_board(request):
-    return render(request, "chat/operations/board.html", {"active_view": "board"})
+    return render(request, "chat/operations/board.html", {
+        "active_view": "board",
+        "routing_categories": CATEGORY_CHOICES,
+        "routing_teams": TEAM_CHOICES,
+        "handoff_choices": IncidentReport._meta.get_field("grc_handoff_status").choices,
+    })
 
 
 @staff_member_required
@@ -190,16 +201,38 @@ def operations_case_update(request, ticket_id):
     if case is None:
         return JsonResponse({"error": "ไม่พบเคสนี้"}, status=404)
     previous_status = case.status
+    previous_category = case.routing_category
     version = case.updated_at.isoformat()
     form_class = OperationsMoveForm if request.POST.get("action") == "move" else OperationsCaseForm
-    form = form_class(request.POST, instance=case)
+    data = request.POST.copy()
+    for field in ("routing_category", "assigned_team", "resolution_summary", "grc_case_id", "grc_handoff_status"):
+        if field not in data:
+            data[field] = getattr(case, field)
+    form = form_class(data, instance=case)
     if not form.is_valid():
         errors = [error for field_errors in form.errors.values() for error in field_errors]
         return JsonResponse({"error": " ".join(errors)}, status=400)
     if form.has_changed():
         if request.POST.get("version") != version:
             return JsonResponse({"error": "เคสถูกอัปเดตแล้ว กรุณาเปิดเคสใหม่ก่อนบันทึก"}, status=409)
-        case.save(update_fields=[*form.changed_data, "updated_at"])
+        now = timezone.now()
+        changed = set(form.changed_data)
+        if "assigned_team" in changed:
+            case.assigned_at = now if case.assigned_team else None
+            changed.add("assigned_at")
+        if "resolution_summary" in changed:
+            case.resolved_at = (case.resolved_at or now) if case.resolution_summary else None
+            changed.add("resolved_at")
+        rematch = case.routing_category != previous_category
+        prior_policy = POLICY.get(previous_category)
+        if rematch and prior_policy and "assigned_team" not in changed and case.assigned_team == prior_policy[1]:
+            case.assigned_team, case.assigned_at = "", None
+            changed.update(("assigned_team", "assigned_at"))
+        if rematch and not case.routing_category:
+            case.sla_due_at = None
+            changed.add("sla_due_at")
+        changed.update(apply_initial_routing(case, now, rematch=rematch))
+        case.save(update_fields=[*changed, "updated_at"])
         if case.status != previous_status:
             notify_case_status(case)
     return JsonResponse({"ok": True})
@@ -251,7 +284,20 @@ def monitoring_cases(request):
     can_edit = request.user.has_perm("chat.change_incidentreport")
     for case in cases.prefetch_related("status_events")[:200]:
         item = _case_data(case)
+        policy = POLICY.get(case.routing_category)
         item.update({
+            "received_at": (case.received_at or case.created_at).isoformat(),
+            "routing_category": case.routing_category,
+            "routing_level": policy[2] if policy else "",
+            "assigned_team": case.assigned_team,
+            "assigned_team_label": TEAMS.get(case.assigned_team, case.assigned_team),
+            "assigned_at": case.assigned_at.isoformat() if case.assigned_at else None,
+            "sla_due_at": case.sla_due_at.isoformat() if case.sla_due_at else None,
+            "resolved_at": case.resolved_at.isoformat() if case.resolved_at else None,
+            "resolution_summary": case.resolution_summary,
+            "grc_case_id": case.grc_case_id,
+            "grc_handoff_status": case.grc_handoff_status,
+            "grc_handoff_label": case.get_grc_handoff_status_display(),
             "created_at": case.created_at.isoformat(),
             "coordinates": _case_coordinates(case),
             "saved_coordinates": [float(case.latitude), float(case.longitude)]
@@ -331,6 +377,7 @@ def chat_pin(request):
 @require_POST
 @chat_session_required
 def chat_api(request):
+    received_at = timezone.now()
     try:
         data = json.loads(request.body)
         message = str(data["message"]).strip()
@@ -365,7 +412,7 @@ def chat_api(request):
         return JsonResponse({"reply": result.reply, "case": None})
 
     if case is None:
-        case = IncidentReport.objects.create(session_key=_ensure_session(request))
+        case = IncidentReport.objects.create(session_key=_ensure_session(request), received_at=received_at)
         request.session["current_ticket_id"] = case.ticket_id
         request.session.pop("pre_case_history", None)
         StatusEvent.objects.create(
@@ -386,6 +433,10 @@ def chat_api(request):
     with transaction.atomic():
         case = IncidentReport.objects.select_for_update().get(pk=case.pk)
         changed_fields = ["updated_at"]
+        was_submitted = case.flow_state == IncidentReport.FlowState.SUBMITTED
+        if not was_submitted and result.routing_category in POLICY:
+            case.routing_category = result.routing_category
+            changed_fields.append("routing_category")
         if case.flow_state != IncidentReport.FlowState.SUBMITTED:
             if result.flow_state == IncidentReport.FlowState.SUBMITTED:
                 if case.latitude is None or case.longitude is None:
@@ -415,6 +466,8 @@ def chat_api(request):
             elif case.occurred_at != previous_occurrence:
                 case.occurred_at_normalized = None
                 changed_fields.append("occurred_at_normalized")
+        if not was_submitted:
+            changed_fields.extend(apply_initial_routing(case, timezone.now()))
         case.save(update_fields=changed_fields)
 
     return JsonResponse({"reply": result.reply, "case": _case_data(case)})
