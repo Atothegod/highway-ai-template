@@ -10,8 +10,9 @@ from .models import IncidentReport, StatusEvent
 class RoleLandingTests(TestCase):
     def test_landing_links_to_each_login(self):
         response = self.client.get("/")
-        for path in ("/login/", "/operations/login/", "/admin/login/"):
+        for path in ("/login/", "/operations/login/"):
             self.assertContains(response, f'href="{path}"')
+        self.assertNotContains(response, "/admin/")
 
     def test_operations_requires_staff_and_returns_to_requested_page(self):
         login_path = "/operations/login/?next=/operations/board/"
@@ -23,6 +24,41 @@ class RoleLandingTests(TestCase):
         self.assertContains(denied, "บัญชีนี้ไม่มีสิทธิ์เข้า Operations")
         allowed = self.client.post(login_path, {"username": "operator", "password": "test-pass", "next": "/operations/board/"})
         self.assertRedirects(allowed, "/operations/board/")
+
+
+    def test_operations_staff_cannot_enter_admin_but_superuser_can(self):
+        users = get_user_model().objects
+        operator = users.create_user(username="ordinary-staff", password="test-pass", is_staff=True)
+        self.client.force_login(operator)
+        self.assertContains(self.client.get("/operations/"), "Dashboard")
+        self.assertNotContains(self.client.get("/monitor/"), "/admin/")
+        self.assertRedirects(self.client.get("/admin/"), "/admin/login/?next=/admin/")
+        self.assertRedirects(self.client.get("/admin/chat/incidentreport/"),
+                             "/admin/login/?next=/admin/chat/incidentreport/")
+        self.client.logout()
+        denied = self.client.post("/admin/login/", {"username": "ordinary-staff", "password": "test-pass"})
+        self.assertContains(denied, "บัญชีนี้ไม่มีสิทธิ์เข้าหน้าผู้ดูแลระบบ")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        administrator = users.create_superuser(username="administrator", password="test-pass")
+        self.client.force_login(administrator)
+        self.assertEqual(self.client.get("/admin/").status_code, 200)
+
+
+    def test_logout_clears_both_roles_and_returns_to_landing(self):
+        operator = get_user_model().objects.create_user(username="logout-operator", is_staff=True)
+        self.client.force_login(operator)
+        self.client.post("/login/", {"username": "reporter", "pdpa_consent": "on"})
+        self.assertContains(self.client.get("/operations/"), "Logout")
+        self.assertContains(self.client.get("/chat/"), "Logout")
+        session_key = self.client.session.session_key
+        self.assertEqual(self.client.get("/logout/").status_code, 405)
+        self.assertRedirects(self.client.post("/logout/"), "/")
+        self.assertNotIn("chat_identity", self.client.session)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertNotEqual(self.client.session.session_key, session_key)
+        self.assertRedirects(self.client.get("/chat/"), "/login/")
+        self.assertRedirects(self.client.get("/operations/"), "/operations/login/?next=/operations/")
 
 
 class ConversationsTests(TestCase):

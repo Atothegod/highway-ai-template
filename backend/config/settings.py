@@ -9,7 +9,7 @@ if HTTPS_DOMAIN:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "config.admin_config.BemAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

@@ -12,7 +12,7 @@
     .brand img { width: 104px; height: 38px; object-fit: contain; }
     .brand strong { border-inline-start: 1px solid #c9d6df; padding-inline-start: 16px; }
     h1 { color: #07365f; margin: 28px 0 20px; font-size: clamp(1.75rem, 4vw, 2.4rem); }
-    nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .entry { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 22px; background: white; border: 1px solid #cad8e2; border-radius: 14px; color: #07365f; text-decoration: none; }
     .entry:first-child { background: #07365f; border-color: #07365f; color: white; }
     .entry strong { font-size: 1.16rem; }
@@ -41,10 +41,6 @@
       <a class="entry" href="{% url 'operations_login' %}">
         <strong>เจ้าหน้าที่ Operations</strong>
         <span>ดูรายการเคส แผนที่ และติดตามการดำเนินงาน</span>
-      </a>
-      <a class="entry" href="{% url 'admin:login' %}">
-        <strong>ผู้ดูแลระบบ</strong>
-        <span>จัดการบัญชีผู้ใช้ สิทธิ์ และข้อมูลใน Django Admin</span>
       </a>
     </nav>
   </main>

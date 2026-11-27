@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from django.db import transaction
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.admin.utils import quote
+from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView
 from django.contrib.sessions.models import Session
 from django.core.exceptions import PermissionDenied
@@ -159,9 +159,8 @@ def chat_login(request):
 @never_cache
 @require_POST
 def chat_logout(request):
-    for key in (CHAT_IDENTITY, "current_ticket_id", "pre_case_history"):
-        request.session.pop(key, None)
-    return redirect("chat_login")
+    logout(request)
+    return redirect("landing")
 
 
 @never_cache
@@ -416,7 +415,6 @@ def monitoring_cases(request):
             "saved_coordinates": [float(case.latitude), float(case.longitude)]
             if case.latitude is not None and case.longitude is not None else None,
             "update_url": reverse("operations_case_update", args=[case.pk]) if can_edit else "",
-            "edit_url": reverse("admin:chat_incidentreport_change", args=[quote(case.pk)]) if can_edit else "",
             "events": [_event_data(event) for event in case.status_events.all()],
         })
         items.append(item)

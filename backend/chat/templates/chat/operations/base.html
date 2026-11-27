@@ -29,7 +29,7 @@
         <span>Operations</span>
       </a>
       <div class="topbar-meta">
-        <a href="{% url 'landing' %}">หน้าเลือกทางเข้า</a>
+        {% include "chat/logout_button.html" %}
         <a href="{% url 'monitoring' %}">รายการเคสทั้งหมด <span aria-hidden="true">↗</span></a>
         <span class="avatar" title="{{ request.user.get_username }}" aria-label="{{ request.user.get_username }}">{{ request.user.get_username|slice:":1"|upper }}</span>
       </div>

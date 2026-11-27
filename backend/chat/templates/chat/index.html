@@ -30,10 +30,7 @@
     <a class="logo" href="https://www.bemplc.co.th/" target="_blank" rel="noopener"><img src="https://www.bemplc.co.th/Images/logos/logo-bem.svg" alt="BEM — Bangkok Expressway and Metro"></a>
     <div class="brand"><strong>BEM Incident Reporting</strong><small>ระบบรับแจ้งเหตุทางด่วนและรถไฟฟ้า</small></div>
     <div class="secure">ชื่อผู้ใช้ {{ username }}</div>
-    <form class="logout-form" method="post" action="{% url 'chat_logout' %}">
-      {% csrf_token %}
-      <button type="submit">ออกจากระบบ</button>
-    </form>
+    {% include "chat/logout_button.html" %}
   </header>
   <main class="layout">
     <aside class="side">

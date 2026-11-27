@@ -94,8 +94,7 @@
       ${incident.resolution_summary ? `<section class="detail-section"><h3>ผลการแก้ไข</h3><p>${escape(incident.resolution_summary)}</p></section>` : ''}
       ${incident.events.length ? `<section class="detail-section"><h3>ประวัติสถานะ</h3><ol class="detail-events">${incident.events.map((event) => `
         <li><time datetime="${escape(event.created_at)}">${date.format(new Date(event.created_at))}</time><br>
-        <strong>${escape(event.status_label)}</strong> · ${escape(event.message)}</li>`).join('')}</ol></section>` : ''}
-      ${incident.edit_url && !editor ? `<a class="button" href="${escape(incident.edit_url)}">แก้ไขเคสใน Admin ↗</a>` : ''}`;
+        <strong>${escape(event.status_label)}</strong> · ${escape(event.message)}</li>`).join('')}</ol></section>` : ''}`;
     dialog.showModal();
     if (openEditor && editor && incident.update_url) editButton.click();
   }
