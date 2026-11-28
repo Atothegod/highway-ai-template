@@ -137,3 +137,31 @@ python3 scripts/load_chat.py \
 สำหรับการทดสอบ HTTP บนเครื่อง ให้เปิด backend ทดสอบที่ตั้ง `DJANGO_HTTPS_DOMAIN=` ตามตัวอย่าง Docker ด้านบน
 ถ้าพอร์ต 8000 ถูกใช้อยู่ ให้ใช้พอร์ต 8001 โดยแทน `--service-ports` ด้วย `-p 127.0.0.1:8001:8000` และแก้ `--base-url` ให้ตรงกัน
 ลอง `--users 1` ก่อนเพิ่มเป็น 200 และตรวจว่ารายงานได้ `Chat attempts: 1` พร้อมคำตอบ
+
+### เทียบ Gunicorn กับ runserver เมื่อ PostgreSQL เต็ม
+
+ถ้า PostgreSQL ขึ้น `FATAL: sorry, too many clients already` ให้เก็บผล `runserver` ที่ 25 คนก่อน
+จากนั้นหยุดเฉพาะคอนเทนเนอร์ backend ทดสอบบนพอร์ต 8001 ด้วย Ctrl+C ในเทอร์มินัลที่เปิดไว้
+แล้วเปิด Gunicorn บนพอร์ตเดิมและ VM เดิม โดยใช้ Compose ของระบบทดสอบ
+
+```bash
+docker compose run --rm --build --name bem-gunicorn-test \
+  -p 127.0.0.1:8001:8000 -e DJANGO_HTTPS_DOMAIN= backend \
+  sh -c 'python manage.py migrate --noinput &&
+    exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 \
+      --worker-class gthread --workers 2 --threads 8 \
+      --access-logfile - --error-logfile -'
+```
+
+จากอีกเทอร์มินัล รัน workload เดิมที่ 25 คน
+
+```bash
+run_dir="results/gunicorn-25-$(date -u +%Y%m%dT%H%M%SZ)"
+python3 scripts/load_chat.py --base-url http://127.0.0.1:8001 \
+  --users 25 --vm-metrics --p95-limit-ms 15000 --output "$run_dir/chat.csv"
+docker logs --timestamps bem-gunicorn-test > "$run_dir/backend.log" 2>&1
+```
+
+Gunicorn ชุดนี้มี 16 request threads ผู้ใช้ที่เกินจะรอ จึงอาจเห็น p95 เพิ่มแม้ได้คำตอบครบ
+เทียบจำนวนคำตอบ, connection failures, HTTP 500 และ p95 กับ baseline 25 คน แล้วตรวจ PostgreSQL log
+ในช่วงเวลาเดียวกันประกอบ คง `max_connections` ที่ 100 และขนาด VM เดิมในรอบเปรียบเทียบนี้
