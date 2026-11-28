@@ -64,30 +64,45 @@ def request(opener, base_url, path, timeout, data=None, headers=None):
 def prepare(row, base_url, timeout):
     cookies = CookieJar()
     opener = build_opener(HTTPCookieProcessor(cookies), NoRedirect())
+    stage = "GET /login/"
     try:
         status, _, _ = request(opener, base_url, "/login/", timeout)
         row["http_status"] = status
-        csrf = next((cookie.value for cookie in cookies if cookie.name == "csrftoken"), "")
-        if status != 200 or not csrf:
-            raise ValueError("GET /login/ failed or did not set csrftoken")
+        if status != 200:
+            raise ValueError(f"expected HTTP 200, received HTTP {status}")
+        csrf = next((cookie for cookie in cookies if cookie.name == "csrftoken"), None)
+        if csrf is None:
+            raise ValueError("response did not set csrftoken")
+        if csrf.secure and urlsplit(base_url).scheme == "http":
+            raise ValueError(
+                "Django set a Secure CSRF cookie over HTTP. Use the test deployment's HTTPS "
+                "origin or start the local test backend with DJANGO_HTTPS_DOMAIN empty."
+            )
 
         form = urlencode({
-            "username": row["user_id"], "pdpa_consent": "on", "csrfmiddlewaretoken": csrf,
+            "username": row["user_id"], "pdpa_consent": "on", "csrfmiddlewaretoken": csrf.value,
         }).encode()
+        stage = "POST /login/"
+        row["http_status"] = ""
         status, headers, _ = request(
             opener, base_url, "/login/", timeout, form,
             {"Content-Type": "application/x-www-form-urlencoded", "Referer": base_url + "/login/"},
         )
         row["http_status"] = status
+        if status == 403:
+            raise ValueError("HTTP 403 during login. Check Django CSRF settings and proxy scheme.")
         if status != 302 or urlsplit(headers.get("Location", "")).path != "/chat/":
-            raise ValueError("POST /login/ did not redirect to /chat/")
-        if not any(cookie.name == "sessionid" for cookie in cookies):
-            raise ValueError("POST /login/ did not set sessionid")
+            raise ValueError(f"expected HTTP 302 to /chat/, received HTTP {status}")
+        session = next((cookie for cookie in cookies if cookie.name == "sessionid"), None)
+        if session is None:
+            raise ValueError("response did not set sessionid")
+        if session.secure and urlsplit(base_url).scheme == "http":
+            raise ValueError("Django set a Secure session cookie. Use the test deployment's HTTPS origin.")
         csrf = next((cookie.value for cookie in cookies if cookie.name == "csrftoken"), "")
         if not csrf:
             raise ValueError("No csrftoken after login")
     except (OSError, URLError, ValueError) as error:
-        row.update(state="login_failed", error=str(error))
+        row.update(state="login_failed", error=f"{stage}: {error}")
         return None
     row["http_status"] = ""
     return opener, csrf
@@ -238,6 +253,14 @@ def main():
         f"Login failures: {states['login_failed']} | Chat failures: {states['chat_failed']}",
         f"Chat HTTP statuses: {dict(statuses)}",
     ]
+    login_errors = Counter(
+        (row["http_status"] or "no HTTP response", row["error"])
+        for row in rows if row["state"] == "login_failed"
+    )
+    for (status, error), count in login_errors.most_common(5):
+        lines.append(f"Login diagnosis ({count} users, status {status}): {error}")
+    if not ready:
+        lines.append("No chat traffic reached the test endpoint. This run cannot assess agent capacity.")
     if burst_seconds is not None:
         lines.append(f"Burst duration: {burst_seconds:.2f} s")
     percentiles = {}

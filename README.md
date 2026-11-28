@@ -130,3 +130,10 @@ python3 scripts/load_chat.py \
 `--vm-metrics` อ่านค่ารวมของ Linux host ที่รันสคริปต์ ถ้ายิงจาก VM เดียวกับ backend ค่าจะรวมโหลดของตัวสคริปต์ด้วย
 ถ้ายิงจาก VM อื่น ต้องเก็บ metrics ฝั่ง backend แยกต่างหาก ค่ารวมของ host อาจไม่สะท้อน CPU/RAM limit ของแต่ละคอนเทนเนอร์
 ให้เทียบกับ `docker stats` บน VM ที่รัน backend หากตั้ง limit ไว้ ผลรอบนี้เป็นการทดสอบ burst เดียว
+
+ถ้ารายงานขึ้น `Chat attempts: 0` ให้ดูบรรทัด `Login diagnosis` หรือคอลัมน์ `error` ใน `chat.csv`
+ค่าเริ่มต้นของ Compose ตั้ง `DJANGO_HTTPS_DOMAIN` และ Django จะตั้ง Secure cookies
+ถ้าเรียกพอร์ต 8000 ของ service นี้ตรง ๆ ผ่าน HTTP ให้เปลี่ยน `--base-url` เป็น HTTPS origin ของ **ระบบทดสอบ**
+สำหรับการทดสอบ HTTP บนเครื่อง ให้เปิด backend ทดสอบที่ตั้ง `DJANGO_HTTPS_DOMAIN=` ตามตัวอย่าง Docker ด้านบน
+ถ้าพอร์ต 8000 ถูกใช้อยู่ ให้ใช้พอร์ต 8001 โดยแทน `--service-ports` ด้วย `-p 127.0.0.1:8001:8000` และแก้ `--base-url` ให้ตรงกัน
+ลอง `--users 1` ก่อนเพิ่มเป็น 200 และตรวจว่ารายงานได้ `Chat attempts: 1` พร้อมคำตอบ
