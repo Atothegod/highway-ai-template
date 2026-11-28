@@ -1,7 +1,9 @@
 import os
+from time import perf_counter
 from typing import Literal
 
 import dspy
+from dspy.utils.callback import BaseCallback
 from pydantic import BaseModel
 
 from .routing import CATALOG, POLICY
@@ -142,11 +144,30 @@ def _missing_fields(case) -> str:
     return ", ".join(missing) or "ไม่มี — ให้สรุปข้อมูลเพื่อขอการยืนยัน"
 
 
-def run_agent(*, case, history: str, message: str) -> AgentResult:
+class LMCallTimer(BaseCallback):
+    def __init__(self, durations_ms):
+        self.durations_ms = durations_ms
+        self.started = {}
+
+    def on_lm_start(self, call_id, instance, inputs):
+        self.started[call_id] = perf_counter()
+
+    def on_lm_end(self, call_id, outputs, exception=None):
+        started = self.started.pop(call_id)
+        self.durations_ms.append((perf_counter() - started) * 1000)
+
+
+def run_agent(*, case, history: str, message: str, lm_call_durations_ms=None) -> AgentResult:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    lm = dspy.LM(os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash"), api_key=api_key, temperature=0.7)
+    callbacks = [LMCallTimer(lm_call_durations_ms)] if lm_call_durations_ms is not None else []
+    lm = dspy.LM(
+        os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash"),
+        api_key=api_key,
+        temperature=0.7,
+        callbacks=callbacks,
+    )
     with dspy.context(lm=lm):
         raw = dspy.Predict(BEMIncidentSignature)(
             ticket_id=case.ticket_id, case_status=case.status, current_case=_case_text(case),

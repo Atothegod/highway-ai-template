@@ -508,12 +508,13 @@ def _receive_human_message(case, message):
 @chat_session_required
 def chat_api(request):
     started = perf_counter()
-    timings = SimpleNamespace(agent_seconds=0.0, agent_called=False)
+    timings = SimpleNamespace(agent_seconds=0.0, agent_called=False, lm_call_durations_ms=[])
     response = _chat_api_response(request, timings)
     view_ms = (perf_counter() - started) * 1000
     metrics = [f"chat_view;dur={view_ms:.2f}"]
     if timings.agent_called:
         metrics.append(f"agent;dur={timings.agent_seconds * 1000:.2f}")
+    metrics.extend(f"lm_call;dur={duration:.2f}" for duration in timings.lm_call_durations_ms)
     response["Server-Timing"] = ", ".join(metrics)
     return response
 
@@ -564,7 +565,10 @@ def _process_chat_message(request, case, message, received_at, timings, *, start
     agent_started = perf_counter()
     timings.agent_called = True
     try:
-        result = run_agent(case=case or _blank_case(), history=history, message=message)
+        result = run_agent(
+            case=case or _blank_case(), history=history, message=message,
+            lm_call_durations_ms=timings.lm_call_durations_ms,
+        )
     except Exception:
         return JsonResponse({"error": "ระบบผู้ช่วยขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"}, status=502)
     finally:

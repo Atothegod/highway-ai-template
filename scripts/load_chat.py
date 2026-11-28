@@ -109,11 +109,17 @@ def prepare(row, base_url, timeout):
 
 
 def record_server_timings(row, header):
+    lm_calls = []
     for metric in header.split(","):
-        match = re.fullmatch(r"\s*(chat_view|agent);dur=(\d+(?:\.\d+)?)\s*", metric)
+        match = re.fullmatch(r"\s*(chat_view|agent|lm_call);dur=(\d+(?:\.\d+)?)\s*", metric)
         if match:
             name, duration = match.groups()
-            row[f"{name}_ms"] = float(duration)
+            if name == "lm_call":
+                lm_calls.append(duration)
+            else:
+                row[f"{name}_ms"] = float(duration)
+    if lm_calls:
+        row.update(lm_calls=len(lm_calls), lm_call_durations_ms=" | ".join(lm_calls))
     view_ms, agent_ms = row["chat_view_ms"], row["agent_ms"]
     if view_ms != "":
         row["outside_view_ms"] = round(max(0, row["latency_ms"] - view_ms), 2)
@@ -218,7 +224,7 @@ def main():
         rows.append(dict(
             user_id=user_id, article=article(index, user_id), reply="", state="",
             http_status="", latency_ms="", chat_view_ms="", agent_ms="", view_other_ms="",
-            outside_view_ms="", sent_at_utc="", ticket_id="", flow_state="", error="",
+            outside_view_ms="", lm_calls="", lm_call_durations_ms="", sent_at_utc="", ticket_id="", flow_state="", error="",
         ))
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -290,6 +296,11 @@ def main():
             lines.append(f"{key} p95: {p95:.2f} ms ({len(values)} successful samples)")
     if latencies and not any(row["chat_view_ms"] != "" for row in rows if row["state"] == "ok"):
         lines.append("Server-Timing unavailable on successful replies; verify backend image version.")
+    call_counts = Counter(row["lm_calls"] for row in rows if row["lm_calls"] != "")
+    if call_counts:
+        lines.append(f"DSPy LM calls/request (calls: requests): {dict(sorted(call_counts.items()))}")
+    else:
+        lines.append("No DSPy LM call timings recorded.")
     passed = len(latencies) == args.users
     if args.p95_limit_ms is not None:
         passed = passed and percentiles[95] <= args.p95_limit_ms
