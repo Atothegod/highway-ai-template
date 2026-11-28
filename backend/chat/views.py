@@ -3,6 +3,7 @@ import os
 import re
 from decimal import Decimal, InvalidOperation
 from functools import wraps
+from time import perf_counter
 from types import SimpleNamespace
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -506,6 +507,18 @@ def _receive_human_message(case, message):
 @require_POST
 @chat_session_required
 def chat_api(request):
+    started = perf_counter()
+    timings = SimpleNamespace(agent_seconds=0.0, agent_called=False)
+    response = _chat_api_response(request, timings)
+    view_ms = (perf_counter() - started) * 1000
+    metrics = [f"chat_view;dur={view_ms:.2f}"]
+    if timings.agent_called:
+        metrics.append(f"agent;dur={timings.agent_seconds * 1000:.2f}")
+    response["Server-Timing"] = ", ".join(metrics)
+    return response
+
+
+def _chat_api_response(request, timings):
     received_at = timezone.now()
     try:
         data = json.loads(request.body)
@@ -517,19 +530,19 @@ def chat_api(request):
 
     case = _current_case(request)
     if case is None or case.status != IncidentReport.Status.CLOSED:
-        response = _process_chat_message(request, case, message, received_at)
+        response = _process_chat_message(request, case, message, received_at, timings)
         if response is not None:
             return response
     # Closing a case ends its chat context. The next message starts intake again.
     request.session.pop("current_ticket_id", None)
     request.session.pop("pre_case_history", None)
-    response = _process_chat_message(request, None, message, received_at, started_new=True)
+    response = _process_chat_message(request, None, message, received_at, timings, started_new=True)
     if response is not None:
         return response
     return JsonResponse({"error": "เคสนี้เพิ่งถูกปิด กรุณาส่งข้อความอีกครั้ง"}, status=409)
 
 
-def _process_chat_message(request, case, message, received_at, *, started_new=False):
+def _process_chat_message(request, case, message, received_at, timings, *, started_new=False):
     if case and case.human_mode:
         with transaction.atomic():
             case = IncidentReport.objects.select_for_update().get(pk=case.pk)
@@ -548,10 +561,14 @@ def _process_chat_message(request, case, message, received_at, *, started_new=Fa
         f"{dict(ChatMessage.Role.choices).get(item['role'], 'BEM Care')}: {item['content']}"
         for item in history_items
     )
+    agent_started = perf_counter()
+    timings.agent_called = True
     try:
         result = run_agent(case=case or _blank_case(), history=history, message=message)
     except Exception:
         return JsonResponse({"error": "ระบบผู้ช่วยขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"}, status=502)
+    finally:
+        timings.agent_seconds += perf_counter() - agent_started
 
     if case is None and not result.should_open_case:
         history_items.extend([

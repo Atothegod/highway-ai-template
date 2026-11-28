@@ -108,6 +108,19 @@ def prepare(row, base_url, timeout):
     return opener, csrf
 
 
+def record_server_timings(row, header):
+    for metric in header.split(","):
+        match = re.fullmatch(r"\s*(chat_view|agent);dur=(\d+(?:\.\d+)?)\s*", metric)
+        if match:
+            name, duration = match.groups()
+            row[f"{name}_ms"] = float(duration)
+    view_ms, agent_ms = row["chat_view_ms"], row["agent_ms"]
+    if view_ms != "":
+        row["outside_view_ms"] = round(max(0, row["latency_ms"] - view_ms), 2)
+        if agent_ms != "":
+            row["view_other_ms"] = round(max(0, view_ms - agent_ms), 2)
+
+
 def send(row, session, gate, base_url, timeout):
     opener, csrf = session
     body = json.dumps({"message": row["article"]}, ensure_ascii=False).encode()
@@ -120,9 +133,10 @@ def send(row, session, gate, base_url, timeout):
     started = perf_counter()
     row["sent_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     try:
-        status, _, response = request(opener, base_url, "/api/chat/", timeout, body, headers)
+        status, response_headers, response = request(opener, base_url, "/api/chat/", timeout, body, headers)
         row["http_status"] = status
         row["latency_ms"] = round((perf_counter() - started) * 1000, 2)
+        record_server_timings(row, response_headers.get("Server-Timing", ""))
         try:
             payload = json.loads(response)
         except ValueError:
@@ -203,7 +217,8 @@ def main():
         user_id = f"load-{run_id}-{index:03d}"
         rows.append(dict(
             user_id=user_id, article=article(index, user_id), reply="", state="",
-            http_status="", latency_ms="", sent_at_utc="", ticket_id="", flow_state="", error="",
+            http_status="", latency_ms="", chat_view_ms="", agent_ms="", view_other_ms="",
+            outside_view_ms="", sent_at_utc="", ticket_id="", flow_state="", error="",
         ))
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -268,6 +283,13 @@ def main():
         for p in (50, 95, 99):
             percentiles[p] = latencies[math.ceil(len(latencies) * p / 100) - 1]
             lines.append(f"Successful reply p{p}: {percentiles[p]:.2f} ms")
+    for key in ("agent_ms", "chat_view_ms", "view_other_ms", "outside_view_ms"):
+        values = sorted(row[key] for row in rows if row["state"] == "ok" and row[key] != "")
+        if values:
+            p95 = values[math.ceil(len(values) * 0.95) - 1]
+            lines.append(f"{key} p95: {p95:.2f} ms ({len(values)} successful samples)")
+    if latencies and not any(row["chat_view_ms"] != "" for row in rows if row["state"] == "ok"):
+        lines.append("Server-Timing unavailable on successful replies; verify backend image version.")
     passed = len(latencies) == args.users
     if args.p95_limit_ms is not None:
         passed = passed and percentiles[95] <= args.p95_limit_ms
